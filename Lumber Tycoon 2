@@ -41,7 +41,7 @@ end
 
 local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
-    SubTitle    = "LT2 Master Hub V2 | Let7829",
+    SubTitle    = "",
     TabWidth    = 160,
     Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
@@ -57,6 +57,7 @@ local Tabs = {
     Teleport   = Window:AddTab({Title = "Teleport", Icon = "lucide/map-pin"}),
     Autobuy    = Window:AddTab({Title = "Autobuy", Icon = "lucide/shopping-cart"}),
     Vehicle    = Window:AddTab({Title = "Vehicle", Icon = "lucide/car"}),
+    World      = Window:AddTab({Title = "World", Icon = "lucide/globe"}),
     Player     = Window:AddTab({Title = "Player", Icon = "lucide/user"}),
     Visuals    = Window:AddTab({Title = "Visuals", Icon = "lucide/eye"}),
     Automation = Window:AddTab({Title = "Automation", Icon = "lucide/repeat"}),
@@ -128,6 +129,10 @@ local function StartFly()
     bodyGyr = Instance.new("BodyGyro", hrp)
     bodyGyr.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
     bodyGyr.D = 50
+    local flyControls
+    pcall(function()
+        flyControls = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+    end)
     flyConn = RunService.Heartbeat:Connect(function()
         if not _G.Flying then
             if bodyVel then bodyVel:Destroy() bodyVel = nil end
@@ -137,10 +142,20 @@ local function StartFly()
             return
         end
         local cam = workspace.CurrentCamera
-        local hum2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        local dir = hum2 and hum2.MoveDirection or Vector3.zero
+        local dir = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0, 1, 0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir -= Vector3.new(0, 1, 0) end
+        if flyControls then
+            local mv = flyControls:GetMoveVector()
+            if mv.Magnitude > 0.1 then
+                dir += cam.CFrame.RightVector * mv.X + cam.CFrame.LookVector * -mv.Z
+            end
+        end
+        if hum.Jump then dir += Vector3.new(0, 1, 0) end
         bodyVel.Velocity = dir.Magnitude > 0 and dir.Unit * _G.FlySpeed or Vector3.zero
         bodyGyr.CFrame = cam.CFrame
     end)
@@ -611,78 +626,150 @@ Tabs.Teleport:AddButton({Title = "TP To Selected Player's Base", Callback = func
     end
 end})
 
-local function buyViaDialog(npcName, itemName)
-    local npc
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj.Name == npcName and obj:IsA("Model") then npc = obj break end
-    end
-    if not npc then return false end
-    local dialog = npc:FindFirstChildOfClass("Dialog")
-    if not dialog then return false end
-    for _, choice in pairs(dialog:GetChildren()) do
-        if choice:IsA("DialogChoice") and choice.UserDialog:lower():find(itemName:lower()) then
-            firedialogchoiceclicked(choice)
-            return true
+local ClientItemInfo = ReplicatedStorage:WaitForChild("ClientItemInfo")
+local NPCDialog = ReplicatedStorage:WaitForChild("NPCDialog")
+local storeIds = nil
+
+local function loadStoreIds()
+    if storeIds then return storeIds end
+    local ids, count = {}, 0
+    local conn = NPCDialog.PromptChat.OnClientEvent:Connect(function(_, npc)
+        if not ids[npc.Name] then
+            ids[npc.Name] = npc.ID
+            count += 1
+        end
+    end)
+    NPCDialog.SetChattingValue:InvokeServer(1)
+    local t = tick()
+    repeat task.wait() until count >= 12 or tick() - t > 10
+    conn:Disconnect()
+    NPCDialog.SetChattingValue:InvokeServer(0)
+    storeIds = ids
+    return ids
+end
+
+local function getFolder(itemName)
+    for _, folder in ipairs(ClientItemInfo:GetChildren()) do
+        if (folder:FindFirstChild("ItemName") and folder.ItemName.Value == itemName) or folder.Name == itemName then
+            return folder
         end
     end
-    return false
 end
 
-local function tryDirectBuy(itemId, remoteType)
-    local trans = ReplicatedStorage:FindFirstChild("Transactions")
-    local cts = trans and trans:FindFirstChild("ClientToServer")
-    local rem = cts and cts:FindFirstChild(remoteType)
-    if not rem then return false end
-    pcall(function() rem:InvokeServer(itemId) end)
-    return true
-end
-
-local shopItems = {
-    {label = "Basic Hatchet", cf = CFrame.new(264, 3, 57), itemId = 1, remote = "PurchaseTool", npc = "Wood_R_Us_NPC", dialog = "basic"},
-    {label = "Steel Axe", cf = CFrame.new(264, 3, 57), itemId = 2, remote = "PurchaseTool", npc = "Wood_R_Us_NPC", dialog = "steel"},
-    {label = "Silver Axe", cf = CFrame.new(264, 3, 57), itemId = 3, remote = "PurchaseTool", npc = "Wood_R_Us_NPC", dialog = "silver"},
-    {label = "Rukiryaxe", cf = CFrame.new(264, 3, 57), itemId = 4, remote = "PurchaseTool", npc = "Wood_R_Us_NPC", dialog = "rukiryaxe"},
-    {label = "Sawmill", cf = CFrame.new(264, 3, 57), itemId = 10, remote = "PurchaseItem", npc = "Wood_R_Us_NPC", dialog = "sawmill"},
-    {label = "Plank Conveyor", cf = CFrame.new(264, 3, 57), itemId = 11, remote = "PurchaseItem", npc = "Wood_R_Us_NPC", dialog = "conveyor"},
-    {label = "Small Land", cf = CFrame.new(111, 11, -987), itemId = 1, remote = "PurchaseLand", npc = "Land_Store_NPC", dialog = "small"},
-    {label = "Medium Land", cf = CFrame.new(111, 11, -987), itemId = 2, remote = "PurchaseLand", npc = "Land_Store_NPC", dialog = "medium"},
-    {label = "Large Land", cf = CFrame.new(111, 11, -987), itemId = 3, remote = "PurchaseLand", npc = "Land_Store_NPC", dialog = "large"},
-}
-
-local function purchase(item)
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    hrp.CFrame = item.cf
-    task.wait(0.8)
-    if not buyViaDialog(item.npc, item.dialog) then
-        tryDirectBuy(item.itemId, item.remote)
+local function findStoreItem(name)
+    for _, model in ipairs(workspace.Stores:GetChildren()) do
+        if model.Name == "ShopItems" then
+            for _, item in ipairs(model:GetChildren()) do
+                if item:FindFirstChild("Owner") and item.Owner.Value == nil
+                    and item:FindFirstChild("BoxItemName") and item.BoxItemName.Value == name then
+                    return item
+                end
+            end
+        end
     end
 end
 
-local autoBuyActive = false
-local autoBuyTarget = shopItems[1]
+local function findCounter(item)
+    local best, bestDist = nil, math.huge
+    for _, store in ipairs(workspace.Stores:GetChildren()) do
+        local counter = store:FindFirstChild("Counter")
+        if counter then
+            local d = (counter.Position - item.Main.Position).Magnitude
+            if d < bestDist then best, bestDist = counter, d end
+        end
+    end
+    return best
+end
 
-local shopNames = {}
-for _, item in ipairs(shopItems) do table.insert(shopNames, item.label) end
+local function dragTo(model, cf)
+    for _ = 1, 60 do
+        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(model)
+        model:PivotTo(cf)
+        task.wait()
+    end
+end
+
+local function buyOne(name)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local folder = getFolder(name)
+    local item = findStoreItem(folder and folder.Name or name)
+    if not item then
+        notify("Buy", "No " .. name .. " in stock", 3)
+        return false
+    end
+    local counter = findCounter(item)
+    if not counter then
+        notify("Buy", "Counter not found", 3)
+        return false
+    end
+
+    local startCF = hrp.CFrame
+    local ids = loadStoreIds()
+    local npcName = nil
+    for _, p in ipairs(counter.Parent:GetDescendants()) do
+        if p.Name == "Head" and p.Parent and p.Parent:IsA("Model") then npcName = p.Parent break end
+    end
+
+    hrp.CFrame = item.Main.CFrame + Vector3.new(5, 3, 5)
+    task.wait(0.8)
+
+    local bought
+    local conn = workspace.PlayerModels.ChildAdded:Connect(function(obj)
+        local owner = obj:WaitForChild("Owner", 1)
+        local itemName = obj:WaitForChild("ItemName", 1)
+        local purchased = obj:WaitForChild("PurchasedBoxItemName", 1)
+        if owner and owner.Value == LocalPlayer and folder
+            and ((itemName and itemName.Value == folder.Name) or (purchased and purchased.Value == folder.Name)) then
+            bought = obj
+        end
+    end)
+
+    dragTo(item, counter.CFrame + Vector3.new(0, counter.Size.Y * item.Main.Size.Y / 2, 0))
+
+    local tries = 0
+    repeat
+        task.wait()
+        tries += 1
+        if npcName and ids[npcName.Name] then
+            pcall(function()
+                NPCDialog.PlayerChatted:InvokeServer({ID = ids[npcName.Name]}, "ConfirmPurchase")
+            end)
+        end
+    until bought or tries > 40
+
+    conn:Disconnect()
+
+    if bought then
+        dragTo(bought, startCF)
+        notify("Buy", "Bought " .. name, 3)
+    else
+        notify("Buy", "Purchase did not go through", 3)
+    end
+    hrp.CFrame = startCF
+    return bought ~= nil
+end
+
+local selectedBuy = "Basic Hatchet"
+local autoBuyOn = false
 
 Tabs.Autobuy:AddDropdown("BuyTarget", {
-    Title = "Item", Values = shopNames, Multi = false, Default = 1,
-    Callback = function(value)
-        for _, item in ipairs(shopItems) do
-            if item.label == value then autoBuyTarget = item end
-        end
-    end,
+    Title = "Item",
+    Values = {"Basic Hatchet", "Steel Axe", "Silver Axe", "Rukiryaxe", "Sawmill", "Plank Conveyor"},
+    Multi = false,
+    Default = 1,
+    Callback = function(v) selectedBuy = v end,
 })
 
 Tabs.Autobuy:AddToggle("AutoBuy", {
-    Title = "Auto Buy", Default = false,
+    Title = "Auto Buy",
+    Default = false,
     Callback = function(state)
-        autoBuyActive = state
+        autoBuyOn = state
         if state then
             task.spawn(function()
-                while autoBuyActive and _G.MasterActive do
-                    pcall(function() purchase(autoBuyTarget) end)
+                while autoBuyOn and _G.MasterActive do
+                    buyOne(selectedBuy)
                     task.wait(2)
                 end
             end)
@@ -690,144 +777,168 @@ Tabs.Autobuy:AddToggle("AutoBuy", {
     end,
 })
 
-Tabs.Autobuy:AddButton({Title = "Instant Buy Selected", Callback = function()
-    task.spawn(purchase, autoBuyTarget)
-    notify("Buying", autoBuyTarget.label)
+Tabs.Autobuy:AddButton({Title = "Buy Selected Once", Callback = function()
+    task.spawn(buyOne, selectedBuy)
 end})
 
-Tabs.Vehicle:AddButton({Title = "Flip Vehicle", Callback = function()
-    local seat = getNearestVehicleSeat()
-    if seat and seat.Parent then
-        seat.Parent:PivotTo(seat.Parent:GetPivot() * CFrame.Angles(0, 0, math.pi))
-        notify("Vehicle", "Flipped")
-    end
-end})
-Tabs.Vehicle:AddButton({Title = "Teleport Vehicle To Me", Callback = function()
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local seat = getNearestVehicleSeat()
-    if hrp and seat and seat.Parent then
-        seat.Parent:PivotTo(CFrame.new(hrp.Position + Vector3.new(5, 0, 0)))
-        notify("Vehicle", "Teleported")
-    end
-end})
-Tabs.Vehicle:AddButton({Title = "Eject From Vehicle", Callback = function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Sit = false end
-end})
-Tabs.Vehicle:AddButton({Title = "Sink All Vehicles", Callback = function()
-    local count = 0
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("VehicleSeat") and obj.Parent then
-            obj.Parent:PivotTo(CFrame.new(obj.Parent:GetPivot().Position + Vector3.new(0, -50, 0)))
-            count += 1
+local function vehicleSpeed(value)
+    for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
+        if v:FindFirstChild("Type") and v.Type.Value == "Vehicle" and v:FindFirstChild("DriveSeat") then
+            pcall(function() v.Configuration.MaxSpeed.Value = value end)
         end
     end
-    notify("Vehicle", "Sank " .. count .. " vehicles")
+end
+
+local function flipVehicle()
+    pcall(function()
+        local char = LocalPlayer.Character
+        char.Humanoid.SeatPart.Parent:PivotTo(CFrame.new(char.HumanoidRootPart.CFrame.p) + Vector3.new(0, 5, 0))
+    end)
+end
+
+Tabs.Vehicle:AddSlider("VehicleSpeed", {
+    Title = "Vehicle Speed", Default = 1, Min = 1, Max = 6, Rounding = 0,
+    Callback = vehicleSpeed,
+})
+Tabs.Vehicle:AddButton({Title = "Flip Vehicle", Callback = flipVehicle})
+
+local alwaysDay, alwaysNight = false, false
+RunService.Heartbeat:Connect(function()
+    if alwaysDay then
+        Lighting.ClockTime = 12
+    elseif alwaysNight then
+        Lighting.ClockTime = 0
+    end
+end)
+
+local function changeWater(property, value)
+    pcall(function()
+        for _, part in ipairs(workspace.Water:GetChildren()) do
+            if part.Name == "Water" then part[property] = value end
+        end
+    end)
+end
+
+local function bridgeDown(down)
+    pcall(function()
+        for _, part in ipairs(workspace.Bridge.VerticalLiftBridge.Lift:GetChildren()) do
+            part.Position = part.Position + Vector3.new(0, down and -26 or 26, 0)
+        end
+    end)
+end
+
+local extraSupportsLoaded = false
+
+Tabs.World:AddToggle("AlwaysDay", {
+    Title = "Always Day", Default = false,
+    Callback = function(s)
+        alwaysDay = s
+        if s then alwaysNight = false end
+    end,
+})
+Tabs.World:AddToggle("AlwaysNight", {
+    Title = "Always Night", Default = false,
+    Callback = function(s)
+        alwaysNight = s
+        if s then alwaysDay = false end
+    end,
+})
+Tabs.World:AddToggle("Shadows", {
+    Title = "Shadows", Default = true,
+    Callback = function(s) Lighting.GlobalShadows = s end,
+})
+Tabs.World:AddButton({Title = "Remove Spooky Mode", Callback = function()
+    for _, child in ipairs(Lighting:GetChildren()) do child:Destroy() end
 end})
-Tabs.Vehicle:AddButton({Title = "Freeze Nearest Vehicle", Callback = function()
-    local seat = getNearestVehicleSeat()
-    if seat and seat.Parent then
-        local frozen = false
-        for _, p in pairs(seat.Parent:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.Anchored = not p.Anchored
-                frozen = p.Anchored
+Tabs.World:AddToggle("BridgeDown", {
+    Title = "Bridge Down", Default = false,
+    Callback = function(s) bridgeDown(s) end,
+})
+Tabs.World:AddToggle("WalkOnWater", {
+    Title = "Walk On Water", Default = false,
+    Callback = function(s) changeWater("CanCollide", s) end,
+})
+Tabs.World:AddToggle("RemoveWater", {
+    Title = "Remove Water", Default = false,
+    Callback = function(s) changeWater("Transparency", s and 1 or 0) end,
+})
+Tabs.World:AddToggle("ExtraSupports", {
+    Title = "Extra Supports", Default = false,
+    Callback = function(s)
+        if s and not extraSupportsLoaded then
+            extraSupportsLoaded = true
+            pcall(function()
+                loadstring(game:HttpGet("https://pastebin.com/raw/tASirLbL"))()
+            end)
+        elseif not s then
+            notify("Extra Supports", "Rejoin to fully remove supports", 4)
+        end
+    end,
+})
+Tabs.World:AddButton({Title = "Get Green Box", Callback = function()
+    pcall(function()
+        workspace.Region_Volcano.VolcanoWin.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+    end)
+end})
+
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    Ambient = Lighting.Ambient,
+}
+
+local function setFullbright(on)
+    _G.FullBright = on
+    if not on then
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.Ambient = originalLighting.Ambient
+    end
+end
+
+local draggerConn
+local function setHardDragger(on)
+    if on then
+        draggerConn = workspace.ChildAdded:Connect(function(obj)
+            if obj.Name == "Dragger" then
+                local BG = obj:WaitForChild("BodyGyro", 2)
+                local BP = obj:WaitForChild("BodyPosition", 2)
+                if not (BG and BP) then return end
+                repeat
+                    BP.P = 80000
+                    BP.D = 1000
+                    BP.MaxForce = Vector3.new(1, 1, 1) * 1000000
+                    BG.MaxTorque = Vector3.new(1, 1, 1) * 200
+                    BG.P = 1200
+                    BG.D = 140
+                    task.wait()
+                until not workspace:FindFirstChild("Dragger")
             end
-        end
-        notify("Vehicle", frozen and "Frozen" or "Unfrozen")
+        end)
+    elseif draggerConn then
+        draggerConn:Disconnect()
+        draggerConn = nil
     end
-end})
-Tabs.Vehicle:AddButton({Title = "Respawn Vehicle", Callback = function()
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local seat = getNearestVehicleSeat()
-    if hrp and seat and seat.Parent then
-        seat.Parent:PivotTo(CFrame.new(hrp.Position + Vector3.new(5, 2, 0)))
-        for _, p in pairs(seat.Parent:GetDescendants()) do
-            if p:IsA("BasePart") then p.Anchored = false end
-        end
-        notify("Vehicle", "Respawned")
+end
+
+local function longWire()
+    for _, info in ipairs(ReplicatedStorage.ClientItemInfo:GetChildren()) do
+        pcall(function()
+            if info.ItemName.Value == "Wire" then
+                info.OtherInfo.MaxLength.Value = 60
+            end
+        end)
     end
-end})
+end
 
-local vehSpeedVal = 100
-Tabs.Vehicle:AddSlider("VehSpeed", {
-    Title = "Vehicle Speed", Default = 100, Min = 50, Max = 500, Rounding = 0,
-    Callback = function(v) vehSpeedVal = v end,
-})
-Tabs.Vehicle:AddToggle("VehBoost", {
-    Title = "Vehicle Speed Boost", Default = false,
-    Callback = function(state)
-        if state then
-            task.spawn(function()
-                while Options.VehBoost.Value and _G.MasterActive do
-                    for _, obj in pairs(workspace:GetDescendants()) do
-                        if obj:IsA("VehicleSeat") then
-                            obj.MaxSpeed = vehSpeedVal
-                            obj.Torque = 500
-                            obj.TurnSpeed = 2
-                        end
-                    end
-                    task.wait(0.5)
-                end
-            end)
-        end
-    end,
-})
-
-Tabs.Player:AddToggle("NoclipToggle", {Title = "Noclip", Default = false, Callback = function(s) _G.Noclip = s end})
-Tabs.Player:AddToggle("FlyToggle", {Title = "Fly", Default = false, Callback = function(s) SetFly(s) end})
-Tabs.Player:AddToggle("InfJumpToggle", {Title = "Inf Jump", Default = false, Callback = function(s) _G.InfJump = s end})
-Tabs.Player:AddToggle("Speed", {Title = "Apply Walk/Jump Values", Default = false})
-Tabs.Player:AddToggle("FullBright", {Title = "Fullbright", Default = false, Callback = function(s) _G.FullBright = s end})
-Tabs.Player:AddToggle("AntiAFK", {Title = "Anti AFK", Default = true, Callback = function(s) _G.AntiAFK = s end})
-
-local godActive = false
-Tabs.Player:AddToggle("GodMode", {
-    Title = "God Mode", Default = false,
-    Callback = function(state)
-        godActive = state
-        if state then
-            task.spawn(function()
-                while godActive and _G.MasterActive do
-                    pcall(function()
-                        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                        if hum then
-                            hum.MaxHealth = math.huge
-                            hum.Health = math.huge
-                        end
-                    end)
-                    task.wait(0.1)
-                end
-            end)
-        end
-    end,
-})
-
-Tabs.Player:AddButton({Title = "Walk On Water", Callback = function()
-    loadstring(game:HttpGet("https://pastebin.com/raw/tASirLbL"))()
-end})
-Tabs.Player:AddButton({Title = "Reset Character", Callback = function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Health = 0 end
-end})
-Tabs.Player:AddButton({Title = "Sit Down", Callback = function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Sit = true end
-end})
-Tabs.Player:AddButton({Title = "Invisible", Callback = function()
+local function safeSuicide()
     local char = LocalPlayer.Character
-    if not char then return end
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then p.LocalTransparencyModifier = 1 end
-    end
-end})
-Tabs.Player:AddButton({Title = "Visible Again", Callback = function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, p in pairs(char:GetDescendants()) do
-        if p:IsA("BasePart") then p.LocalTransparencyModifier = 0 end
-    end
-end})
+    if char then char:PivotTo(CFrame.new(3392, -397, -3389)) end
+end
 
 Tabs.Player:AddSlider("WalkSpeed", {
     Title = "WalkSpeed", Default = 16, Min = 16, Max = 200, Rounding = 0,
@@ -841,6 +952,24 @@ Tabs.Player:AddSlider("FlySpeed", {
     Title = "Fly Speed", Default = 60, Min = 10, Max = 300, Rounding = 0,
     Callback = function(v) _G.FlySpeed = v end,
 })
+
+Tabs.Player:AddToggle("NoclipToggle", {Title = "Noclip", Default = false, Callback = function(s) _G.Noclip = s end})
+Tabs.Player:AddToggle("FlyToggle", {Title = "Fly", Default = false, Callback = function(s) SetFly(s) end})
+Tabs.Player:AddToggle("InfJumpToggle", {Title = "Inf Jump", Default = false, Callback = function(s) _G.InfJump = s end})
+Tabs.Player:AddToggle("Speed", {Title = "Apply Walk/Jump Values", Default = false})
+Tabs.Player:AddToggle("FullBright", {Title = "Fullbright", Default = false, Callback = function(s) setFullbright(s) end})
+Tabs.Player:AddToggle("AntiAFK", {Title = "Anti AFK", Default = true, Callback = function(s) _G.AntiAFK = s end})
+Tabs.Player:AddToggle("HardDragger", {Title = "Hard Dragger", Default = false, Callback = setHardDragger})
+Tabs.Player:AddButton({Title = "Long Wire", Callback = longWire})
+Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicide})
+Tabs.Player:AddButton({Title = "Reset Character", Callback = function()
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = 0 end
+end})
+Tabs.Player:AddButton({Title = "Sit Down", Callback = function()
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Sit = true end
+end})
 
 Tabs.Visuals:AddToggle("PlayerESP", {
     Title = "Player ESP", Default = false,
@@ -1089,10 +1218,17 @@ local function styleHub()
     local hub = getHub()
     if not hub then return end
 
+    local function round(obj, radius)
+        if not obj:FindFirstChildOfClass("UICorner") then
+            Instance.new("UICorner", obj).CornerRadius = UDim.new(0, radius)
+        end
+    end
+
     for _, d in ipairs(hub:GetDescendants()) do
         if d:IsA("Frame") and d.AbsoluteSize.X > 400 then
             d.BackgroundColor3 = Color3.new(0, 0, 0)
             d.BackgroundTransparency = 0
+            round(d, 12)
         end
     end
 
@@ -1102,6 +1238,10 @@ local function styleHub()
             root = c
             biggest = c.AbsoluteSize.X
         end
+    end
+    if root then
+        round(root, 12)
+        root.ClipsDescendants = true
     end
 
     local PM = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"))
@@ -1137,6 +1277,7 @@ local function styleHub()
                 if d.Text:sub(1, #rule[1]) == rule[1] then
                     local target = d:IsA("TextButton") and d or d.Parent
                     if target and not target:FindFirstChild("ColorOutline") then
+                        round(target, 9)
                         local s = Instance.new("UIStroke")
                         s.Name = "ColorOutline"
                         s.Color = rule[2]
@@ -1152,6 +1293,39 @@ local function styleHub()
 end
 
 task.spawn(styleHub)
+
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "GreenHubToggle"
+ToggleGui.ResetOnSpawn = false
+ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "OpenClose"
+ToggleBtn.Size = UDim2.fromOffset(110, 36)
+ToggleBtn.Position = UDim2.new(0, 20, 0, 120)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+ToggleBtn.Text = "Open/Close"
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 14
+ToggleBtn.Parent = ToggleGui
+
+local ToggleCorner = Instance.new("UICorner", ToggleBtn)
+ToggleCorner.CornerRadius = UDim.new(0, 9)
+
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = Color3.fromRGB(0, 255, 0)
+ToggleStroke.Thickness = 2
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    local hub = getHub()
+    if not hub then
+        notify("Hub", "Hub not found yet", 2)
+        return
+    end
+    hub.Enabled = not hub.Enabled
+end)
 
 Window:SelectTab(1)
 notify("Green Hub", "Loaded!", 4)
