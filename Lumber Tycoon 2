@@ -5,6 +5,7 @@ local Fluent = loadstring(game:HttpGet(
 Fluent:RegisterCustomTheme("Amoled", {
     Accent       = Color3.fromRGB(0, 255, 0),
     AcrylicMain  = Color3.fromRGB(0, 0, 0),
+    Background   = Color3.fromRGB(0, 0, 0),
     Text         = Color3.fromRGB(255, 255, 255),
     IconColor    = Color3.fromRGB(0, 255, 0),
     IconSize     = 18,
@@ -42,7 +43,7 @@ local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
     SubTitle    = "LT2 Master Hub V2 | Let7829",
     TabWidth    = 160,
-    Size        = UDim2.fromOffset(560, 420),
+    Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
     Theme       = "Amoled",
     MinimizeKey = Enum.KeyCode.RightShift,
@@ -52,6 +53,7 @@ local Window = Fluent:CreateWindow({
 local Tabs = {
     Home       = Window:AddTab({Title = "Home", Icon = "solar/home-bold"}),
     Wood       = Window:AddTab({Title = "Wood", Icon = "lucide/trees"}),
+    Bring      = Window:AddTab({Title = "Bring", Icon = "lucide/package"}),
     Teleport   = Window:AddTab({Title = "Teleport", Icon = "lucide/map-pin"}),
     Autobuy    = Window:AddTab({Title = "Autobuy", Icon = "lucide/shopping-cart"}),
     Vehicle    = Window:AddTab({Title = "Vehicle", Icon = "lucide/car"}),
@@ -62,12 +64,12 @@ local Tabs = {
     Slots      = Window:AddTab({Title = "Slots", Icon = "lucide/save"}),
     Misc       = Window:AddTab({Title = "Misc", Icon = "lucide/wrench"}),
     Dupe       = Window:AddTab({Title = "Dupe", Icon = "lucide/copy"}),
-    Settings   = Window:AddTab({Title = "Settings", Icon = "gravity/settings"}),
+    Settings   = Window:AddTab({Title = "Settings", Icon = "lucide/settings"}),
 }
 
 local Options = Fluent.Options
 
-local VU_Conn = LocalPlayer.Idled:Connect(function()
+LocalPlayer.Idled:Connect(function()
     if _G.AntiAFK then
         VU:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
         task.wait(1)
@@ -78,9 +80,9 @@ end)
 RunService.Heartbeat:Connect(function()
     local c = LocalPlayer.Character
     local h = c and c:FindFirstChildOfClass("Humanoid")
-    if h then
-        if Options.Speed and Options.Speed.Value then h.WalkSpeed = _G.WalkSpeed end
-        if Options.Speed and Options.Speed.Value then h.JumpPower = _G.JumpPower end
+    if h and Options.Speed and Options.Speed.Value then
+        h.WalkSpeed = _G.WalkSpeed
+        h.JumpPower = _G.JumpPower
     end
 end)
 
@@ -135,11 +137,8 @@ local function StartFly()
             return
         end
         local cam = workspace.CurrentCamera
-        local dir = Vector3.zero
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+        local hum2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local dir = hum2 and hum2.MoveDirection or Vector3.zero
         if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0, 1, 0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir -= Vector3.new(0, 1, 0) end
         bodyVel.Velocity = dir.Magnitude > 0 and dir.Unit * _G.FlySpeed or Vector3.zero
@@ -380,13 +379,6 @@ Tabs.Wood:AddButton({Title = "Delete My Wood", Callback = function()
     notify("Wood", "Deleted " .. count .. " logs")
 end})
 
-local woodTypes = {
-    {"Generic", "Generic"}, {"Oak", "Oak"}, {"Birch", "Birch"}, {"Cherry", "Cherry"},
-    {"Walnut", "Walnut"}, {"Fir", "Fir"}, {"Pine", "Pine"}, {"Volcano", "Volcano"},
-    {"Frost", "Frost"}, {"Gold", "GoldSwampy"}, {"Koa", "Koa"}, {"Palm", "Palm"},
-    {"CaveCrawler", "CaveCrawler"}, {"Zombie", "GreenSwampy"},
-}
-
 local function bringWood(woodType)
     local cooper = LocalPlayer
     local curpos = cooper.Character.HumanoidRootPart.CFrame
@@ -428,11 +420,21 @@ local function bringWood(woodType)
     notify("Wood", woodType .. " brought")
 end
 
-for _, data in ipairs(woodTypes) do
-    Tabs.Wood:AddButton({Title = "Bring " .. data[1], Callback = function()
-        task.spawn(bringWood, data[2])
-    end})
-end
+local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","Zombie"}
+local woodMap = {
+    Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
+    Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
+    Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler", Zombie = "GreenSwampy",
+}
+local selectedWood = "Generic"
+
+Tabs.Wood:AddDropdown("WoodPick", {
+    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
+    Callback = function(v) selectedWood = v end,
+})
+Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
+    task.spawn(bringWood, woodMap[selectedWood])
+end})
 
 Tabs.Wood:AddButton({Title = "Bring Lonecave", Callback = function()
     local char = LocalPlayer.Character
@@ -456,6 +458,58 @@ Tabs.Wood:AddButton({Title = "Bring Lonecave", Callback = function()
         end
     end
     notify("Lonecave", found and "Brought" or "Not found")
+end})
+
+local SelectMode = false
+local selectedItems = {}
+
+local function toggleSelect(model)
+    if selectedItems[model] then
+        selectedItems[model]:Destroy()
+        selectedItems[model] = nil
+    else
+        local h = Instance.new("Highlight")
+        h.FillTransparency = 1
+        h.OutlineColor = Color3.fromRGB(0, 255, 255)
+        h.OutlineTransparency = 0
+        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        h.Adornee = model
+        h.Parent = model
+        selectedItems[model] = h
+    end
+end
+
+LocalPlayer:GetMouse().Button1Down:Connect(function()
+    if not SelectMode then return end
+    local target = LocalPlayer:GetMouse().Target
+    local model = target and target:FindFirstAncestorOfClass("Model")
+    if model and (model.Name:sub(1, 6) == "Loose_" or model:FindFirstChild("TreeClass")) then
+        toggleSelect(model)
+    end
+end)
+
+Tabs.Bring:AddToggle("SelectMode", {
+    Title = "Select Mode", Default = false,
+    Callback = function(s) SelectMode = s end,
+})
+Tabs.Bring:AddButton({Title = "Clear Selection", Callback = function()
+    for m, h in pairs(selectedItems) do h:Destroy() selectedItems[m] = nil end
+end})
+Tabs.Bring:AddButton({Title = "Bring Selected", Callback = function()
+    task.spawn(function()
+        local curpos = LocalPlayer.Character.HumanoidRootPart.CFrame
+        for m, h in pairs(selectedItems) do
+            for i = 1, 60 do
+                ReplicatedStorage.Interaction.ClientIsDragging:FireServer(m)
+                m:PivotTo(curpos)
+                task.wait()
+            end
+            h:Destroy()
+            selectedItems[m] = nil
+        end
+        LocalPlayer.Character.HumanoidRootPart.CFrame = curpos
+        notify("Bring", "Brought selected items")
+    end)
 end})
 
 local LocData = {
@@ -507,10 +561,7 @@ local function getPlayerNames()
 end
 
 local PlayerDrop = Tabs.Teleport:AddDropdown("PlayerTarget", {
-    Title = "Player",
-    Values = getPlayerNames(),
-    Multi = false,
-    Default = 1,
+    Title = "Player", Values = getPlayerNames(), Multi = false, Default = 1,
 })
 
 Tabs.Teleport:AddButton({Title = "Refresh Player List", Callback = function()
@@ -606,27 +657,22 @@ local function purchase(item)
 end
 
 local autoBuyActive = false
-local autoBuyTarget
+local autoBuyTarget = shopItems[1]
 
 local shopNames = {}
 for _, item in ipairs(shopItems) do table.insert(shopNames, item.label) end
 
 Tabs.Autobuy:AddDropdown("BuyTarget", {
-    Title = "Item",
-    Values = shopNames,
-    Multi = false,
-    Default = 1,
+    Title = "Item", Values = shopNames, Multi = false, Default = 1,
     Callback = function(value)
         for _, item in ipairs(shopItems) do
             if item.label == value then autoBuyTarget = item end
         end
     end,
 })
-autoBuyTarget = shopItems[1]
 
 Tabs.Autobuy:AddToggle("AutoBuy", {
-    Title = "Auto Buy",
-    Default = false,
+    Title = "Auto Buy", Default = false,
     Callback = function(state)
         autoBuyActive = state
         if state then
@@ -644,6 +690,8 @@ Tabs.Autobuy:AddButton({Title = "Instant Buy Selected", Callback = function()
     task.spawn(purchase, autoBuyTarget)
     notify("Buying", autoBuyTarget.label)
 end})
+
+local function getNearestSeatButton() return getNearestVehicleSeat() end
 
 Tabs.Vehicle:AddButton({Title = "Flip Vehicle", Callback = function()
     local seat = getNearestVehicleSeat()
@@ -701,16 +749,11 @@ end})
 
 local vehSpeedVal = 100
 Tabs.Vehicle:AddSlider("VehSpeed", {
-    Title = "Vehicle Speed",
-    Default = 100,
-    Min = 50,
-    Max = 500,
-    Rounding = 0,
+    Title = "Vehicle Speed", Default = 100, Min = 50, Max = 500, Rounding = 0,
     Callback = function(v) vehSpeedVal = v end,
 })
 Tabs.Vehicle:AddToggle("VehBoost", {
-    Title = "Vehicle Speed Boost",
-    Default = false,
+    Title = "Vehicle Speed Boost", Default = false,
     Callback = function(state)
         if state then
             task.spawn(function()
@@ -738,8 +781,7 @@ Tabs.Player:AddToggle("AntiAFK", {Title = "Anti AFK", Default = true, Callback =
 
 local godActive = false
 Tabs.Player:AddToggle("GodMode", {
-    Title = "God Mode",
-    Default = false,
+    Title = "God Mode", Default = false,
     Callback = function(state)
         godActive = state
         if state then
@@ -856,14 +898,13 @@ Tabs.Automation:AddToggle("AutoRejoin", {
     end,
 })
 
-local autoFarmWoodType = "Oak"
+local autoFarmWoodType = "Generic"
 local farmStatus = Tabs.Farm:AddParagraph({Title = "Farm Status", Content = "OFF"})
 
 Tabs.Farm:AddDropdown("FarmWood", {
     Title = "Target Wood",
-    Values = {"Oak","Birch","Cherry","Walnut","Fir","Pine","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy"},
-    Multi = false,
-    Default = 1,
+    Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy"},
+    Multi = false, Default = 1,
     Callback = function(v) autoFarmWoodType = v end,
 })
 
@@ -1027,12 +1068,6 @@ Tabs.Dupe:AddButton({Title = "Axe Dupe", Callback = function()
 end})
 
 Tabs.Settings:AddToggle("AnimsEnabled", {Title = "Animations", Default = true})
-Tabs.Settings:AddSlider("UISize", {
-    Title = "UI Scale", Default = 100, Min = 60, Max = 100, Rounding = 0,
-    Callback = function(v)
-        Window:SetSize(UDim2.fromOffset(560 * v / 100, 420 * v / 100))
-    end,
-})
 Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
 
 Window:SelectTab(1)
