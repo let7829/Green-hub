@@ -420,23 +420,7 @@ local function bringWood(woodType)
     notify("Wood", woodType .. " brought")
 end
 
-local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","Zombie"}
-local woodMap = {
-    Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
-    Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
-    Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler", Zombie = "GreenSwampy",
-}
-local selectedWood = "Generic"
-
-Tabs.Wood:AddDropdown("WoodPick", {
-    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
-    Callback = function(v) selectedWood = v end,
-})
-Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
-    task.spawn(bringWood, woodMap[selectedWood])
-end})
-
-Tabs.Wood:AddButton({Title = "Bring Lonecave", Callback = function()
+local function bringLonecave()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
@@ -458,6 +442,26 @@ Tabs.Wood:AddButton({Title = "Bring Lonecave", Callback = function()
         end
     end
     notify("Lonecave", found and "Brought" or "Not found")
+end
+
+local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","Zombie","Lonecave"}
+local woodMap = {
+    Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
+    Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
+    Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler", Zombie = "GreenSwampy",
+}
+local selectedWood = "Generic"
+
+Tabs.Wood:AddDropdown("WoodPick", {
+    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
+    Callback = function(v) selectedWood = v end,
+})
+Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
+    if selectedWood == "Lonecave" then
+        task.spawn(bringLonecave)
+    else
+        task.spawn(bringWood, woodMap[selectedWood])
+    end
 end})
 
 local SelectMode = false
@@ -690,8 +694,6 @@ Tabs.Autobuy:AddButton({Title = "Instant Buy Selected", Callback = function()
     task.spawn(purchase, autoBuyTarget)
     notify("Buying", autoBuyTarget.label)
 end})
-
-local function getNearestSeatButton() return getNearestVehicleSeat() end
 
 Tabs.Vehicle:AddButton({Title = "Flip Vehicle", Callback = function()
     local seat = getNearestVehicleSeat()
@@ -1069,6 +1071,87 @@ end})
 
 Tabs.Settings:AddToggle("AnimsEnabled", {Title = "Animations", Default = true})
 Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
+
+local function getHub()
+    for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
+        for _, gui in ipairs(parent:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                for _, d in ipairs(gui:GetDescendants()) do
+                    if d:IsA("TextLabel") and d.Text:find("Green Hub") then return gui end
+                end
+            end
+        end
+    end
+end
+
+local function styleHub()
+    task.wait(1)
+    local hub = getHub()
+    if not hub then return end
+
+    for _, d in ipairs(hub:GetDescendants()) do
+        if d:IsA("Frame") and d.AbsoluteSize.X > 400 then
+            d.BackgroundColor3 = Color3.new(0, 0, 0)
+            d.BackgroundTransparency = 0
+        end
+    end
+
+    local root, biggest = nil, 0
+    for _, c in ipairs(hub:GetChildren()) do
+        if c:IsA("GuiObject") and c.AbsoluteSize.X > biggest then
+            root = c
+            biggest = c.AbsoluteSize.X
+        end
+    end
+
+    local PM = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"))
+    local Controls = PM:GetControls()
+    if root then
+        root.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                Controls:Disable()
+            end
+        end)
+    end
+    UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            Controls:Enable()
+        end
+    end)
+
+    local outlines = {
+        {"Bring ",      Color3.fromRGB(139, 90, 43)},
+        {"TP",          Color3.fromRGB(0, 150, 255)},
+        {"Load Slot",   Color3.fromRGB(0, 255, 150)},
+        {"Save Slot",   Color3.fromRGB(0, 150, 255)},
+        {"Select Slot", Color3.fromRGB(150, 150, 0)},
+        {"Sell",        Color3.fromRGB(255, 50, 50)},
+        {"Delete",      Color3.fromRGB(200, 50, 50)},
+        {"Destroy",     Color3.fromRGB(255, 0, 0)},
+        {"Axe Dupe",    Color3.fromRGB(255, 100, 0)},
+        {"Infinite",    Color3.fromRGB(0, 180, 255)},
+    }
+    for _, d in ipairs(hub:GetDescendants()) do
+        if d:IsA("TextButton") or d:IsA("TextLabel") then
+            for _, rule in ipairs(outlines) do
+                if d.Text:sub(1, #rule[1]) == rule[1] then
+                    local target = d:IsA("TextButton") and d or d.Parent
+                    if target and not target:FindFirstChild("ColorOutline") then
+                        local s = Instance.new("UIStroke")
+                        s.Name = "ColorOutline"
+                        s.Color = rule[2]
+                        s.Thickness = 2
+                        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                        s.Parent = target
+                    end
+                    break
+                end
+            end
+        end
+    end
+end
+
+task.spawn(styleHub)
 
 Window:SelectTab(1)
 notify("Green Hub", "Loaded!", 4)
