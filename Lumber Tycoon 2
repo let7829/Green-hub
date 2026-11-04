@@ -41,7 +41,7 @@ end
 
 local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
-    SubTitle    = "",
+    SubTitle    = "LT2 Master Hub V2 | Let7829",
     TabWidth    = 160,
     Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
@@ -129,10 +129,12 @@ local function StartFly()
     bodyGyr = Instance.new("BodyGyro", hrp)
     bodyGyr.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
     bodyGyr.D = 50
+
     local flyControls
     pcall(function()
-        flyControls = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+        flyControls = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
     end)
+
     flyConn = RunService.Heartbeat:Connect(function()
         if not _G.Flying then
             if bodyVel then bodyVel:Destroy() bodyVel = nil end
@@ -529,6 +531,47 @@ Tabs.Bring:AddButton({Title = "Bring Selected", Callback = function()
         LocalPlayer.Character.HumanoidRootPart.CFrame = curpos
         notify("Bring", "Brought selected items")
     end)
+end})
+
+local function getCounter()
+    local shop = workspace:FindFirstChild("WoodRUs", true)
+    return shop and shop:FindFirstChild("Counter", true)
+end
+
+local function bringToCounter(model)
+    local counter = getCounter()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not counter or not hrp or not model then
+        notify("Counter", "Counter or box not found", 3)
+        return
+    end
+    local curpos = hrp.CFrame
+    local target = counter.CFrame + Vector3.new(0, 3, 0)
+    for _ = 1, 60 do
+        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(model)
+        model:PivotTo(target)
+        task.wait()
+    end
+    hrp.CFrame = curpos
+    notify("Counter", "Box moved to counter")
+end
+
+local boxName = ""
+Tabs.Bring:AddInput("BoxName", {
+    Title = "Box Name",
+    Default = "",
+    Placeholder = "Exact model name",
+    Numeric = false,
+    Finished = true,
+    Callback = function(text) boxName = text end,
+})
+Tabs.Bring:AddButton({Title = "Bring Box To Counter", Callback = function()
+    local model = boxName ~= "" and workspace:FindFirstChild(boxName, true)
+    if model and model:IsA("Model") then
+        task.spawn(bringToCounter, model)
+    else
+        notify("Counter", "No model named '" .. boxName .. "'", 3)
+    end
 end})
 
 local LocData = {
@@ -1219,24 +1262,29 @@ local function styleHub()
     if not hub then return end
 
     local function round(obj, radius)
-        if not obj:FindFirstChildOfClass("UICorner") then
+        if obj:IsA("GuiObject") and not obj:FindFirstChildOfClass("UICorner") then
             Instance.new("UICorner", obj).CornerRadius = UDim.new(0, radius)
         end
     end
 
     for _, d in ipairs(hub:GetDescendants()) do
-        if d:IsA("Frame") and d.AbsoluteSize.X > 400 then
-            d.BackgroundColor3 = Color3.new(0, 0, 0)
-            d.BackgroundTransparency = 0
-            round(d, 12)
+        if d:IsA("Frame") then
+            if d.AbsoluteSize.X > 400 then
+                d.BackgroundColor3 = Color3.new(0, 0, 0)
+                d.BackgroundTransparency = 0
+                round(d, 12)
+            elseif d.BackgroundTransparency < 1 then
+                round(d, 8)
+            end
+        elseif d:IsA("TextButton") then
+            round(d, 8)
         end
     end
 
-    local root, biggest = nil, 0
+    local root = nil
     for _, c in ipairs(hub:GetChildren()) do
-        if c:IsA("GuiObject") and c.AbsoluteSize.X > biggest then
+        if c:IsA("GuiObject") and (not root or c.AbsoluteSize.X > root.AbsoluteSize.X) then
             root = c
-            biggest = c.AbsoluteSize.X
         end
     end
     if root then
@@ -1258,38 +1306,6 @@ local function styleHub()
             Controls:Enable()
         end
     end)
-
-    local outlines = {
-        {"Bring ",      Color3.fromRGB(139, 90, 43)},
-        {"TP",          Color3.fromRGB(0, 150, 255)},
-        {"Load Slot",   Color3.fromRGB(0, 255, 150)},
-        {"Save Slot",   Color3.fromRGB(0, 150, 255)},
-        {"Select Slot", Color3.fromRGB(150, 150, 0)},
-        {"Sell",        Color3.fromRGB(255, 50, 50)},
-        {"Delete",      Color3.fromRGB(200, 50, 50)},
-        {"Destroy",     Color3.fromRGB(255, 0, 0)},
-        {"Axe Dupe",    Color3.fromRGB(255, 100, 0)},
-        {"Infinite",    Color3.fromRGB(0, 180, 255)},
-    }
-    for _, d in ipairs(hub:GetDescendants()) do
-        if d:IsA("TextButton") or d:IsA("TextLabel") then
-            for _, rule in ipairs(outlines) do
-                if d.Text:sub(1, #rule[1]) == rule[1] then
-                    local target = d:IsA("TextButton") and d or d.Parent
-                    if target and not target:FindFirstChild("ColorOutline") then
-                        round(target, 9)
-                        local s = Instance.new("UIStroke")
-                        s.Name = "ColorOutline"
-                        s.Color = rule[2]
-                        s.Thickness = 2
-                        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                        s.Parent = target
-                    end
-                    break
-                end
-            end
-        end
-    end
 end
 
 task.spawn(styleHub)
