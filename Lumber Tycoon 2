@@ -440,8 +440,8 @@ local function treeStandCF(tree)
             low, lowY = p, p.Position.Y
         end
     end
-    if not low then return nil end
-    return CFrame.new(low.Position + Vector3.new(4, 2, 0))
+    if low then return CFrame.new(low.Position + Vector3.new(4, 2, 0)) end
+    return CFrame.new(tree:GetPivot().Position + Vector3.new(5, 3, 0))
 end
 
 local function bringWood(woodType)
@@ -464,9 +464,10 @@ local function bringWood(woodType)
         local o = l:WaitForChild("Owner", 2)
         if o and o.Value == cooper then newLog = l end
     end)
+    local sc = treeStandCF(target)
     local lp = RunService.Heartbeat:Connect(function()
-        local sc = treeStandCF(target)
-        if sc then cooper.Character.HumanoidRootPart.CFrame = sc end
+        local r = cooper.Character and cooper.Character:FindFirstChild("HumanoidRootPart")
+        if r then r.CFrame = sc end
     end)
     repeat
         ReplicatedStorage.Interaction.RemoteProxy:FireServer(target.CutEvent, {
@@ -645,13 +646,30 @@ local function bringLonecave()
     notify("Lonecave", "Lonecave brought", 3)
 end
 
+local VOID_CF = CFrame.new(3392, -397, -3389)
+
 local function runSafeSuicide()
-    local c = LocalPlayer.Character
-    if c then c:PivotTo(CFrame.new(3392, -397, -3389)) end
+    local char, hum, hrp = aliveChar()
+    if not char then return end
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.CFrame = VOID_CF
+    task.spawn(function()
+        local t = tick()
+        while tick() - t < 3 do
+            local c, h, r = aliveChar()
+            if not c or c ~= char then return end
+            r.AssemblyLinearVelocity = Vector3.zero
+            r.CFrame = VOID_CF
+            task.wait()
+        end
+        local c, h = aliveChar()
+        if c == char and h then h.Health = 0 end
+    end)
 end
 
 local function bringLonecaveSuicide()
     _G.AbortAction = false
+    if _G.Flying and Options.FlyToggle then Options.FlyToggle:SetValue(false) end
     local tree = lonecaveTree()
     if not tree then notify("Lonecave", "Lonecave tree not found", 3) return end
     local stats = getAxStats("EndTimesAxe", "LoneCave")
@@ -680,46 +698,45 @@ local function bringLonecaveSuicide()
         if a then
             h:EquipTool(a)
             task.wait(0.3)
-            return findEndTimesAxe(aliveChar())
+            local c2 = aliveChar()
+            return c2 and findEndTimesAxe(c2)
         end
     end
 
-    local function toTree()
-        local _, _, r = aliveChar()
-        if not r then return false end
-        local sc = treeStandCF(tree)
-        if sc then r.CFrame = sc end
-        task.wait(0.25)
-        return true
-    end
-
     while not newLog and not _G.AbortAction do
+        if not tree.Parent then break end
         if not aliveChar() then
             task.wait(1)
         else
             local ax = getAxe()
-            if not ax or not toTree() then
+            if not ax or not aliveChar() then
                 task.wait(1)
             else
+                local sc = treeStandCF(tree)
+                local glue = RunService.Heartbeat:Connect(function()
+                    local _, _, r = aliveChar()
+                    if r then r.CFrame = sc end
+                end)
+                task.wait(0.25)
                 local chopStart = tick()
-                local suicided = false
-                while not newLog and not _G.AbortAction do
+                local last = 0
+                while not newLog and not _G.AbortAction and tick() - chopStart < 3 do
                     local c = aliveChar()
                     local a = c and findEndTimesAxe(c)
                     if not a then break end
-
-                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                        tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                    })
-                    task.wait(stats.SwingCooldown)
-
-                    if not suicided and tick() - chopStart >= 3 then
-                        suicided = true
-                        runSafeSuicide()
-                        task.wait(5.5)
-                        break
+                    if tick() - last >= stats.SwingCooldown then
+                        ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+                            tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
+                            hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+                        })
+                        last = tick()
                     end
+                    task.wait()
+                end
+                glue:Disconnect()
+                if not newLog and not _G.AbortAction and tick() - chopStart >= 3 and aliveChar() then
+                    runSafeSuicide()
+                    task.wait(6)
                 end
             end
         end
@@ -727,39 +744,29 @@ local function bringLonecaveSuicide()
     con:Disconnect()
 
     if not newLog then
-        local c = aliveChar()
-        if c then c.HumanoidRootPart.CFrame = curpos end
+        local _, _, r = aliveChar()
+        if r then r.CFrame = curpos end
         notify("Lonecave", _G.AbortAction and "Aborted" or "Stopped", 2)
         return
     end
 
-    task.wait(0.15)
-    task.spawn(function()
-        for _ = 1, 60 do
-            ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
-            task.wait()
-        end
-    end)
-    task.wait(0.1)
-
-    newLog.PrimaryPart = newLog.WoodSection
+    task.wait(0.2)
+    local waited = tick()
+    while not aliveChar() and tick() - waited < 10 do task.wait(0.2) end
+    local _, _, hrp = aliveChar()
+    if hrp and newLog.Parent then
+        local part = newLog:FindFirstChild("WoodSection") or newLog:FindFirstChildWhichIsA("BasePart")
+        if part then hrp.CFrame = part.CFrame + Vector3.new(0, 5, 0) end
+        task.wait(0.2)
+    end
     for _ = 1, 60 do
-        newLog.PrimaryPart.Velocity = Vector3.zero
+        if _G.AbortAction then break end
+        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
         newLog:PivotTo(curpos)
         task.wait()
     end
-
-    local char = LocalPlayer.Character
-    if char then
-        char.Humanoid:UnequipTools()
-        task.wait()
-        char.Head:Destroy()
-    end
-    LocalPlayer.CharacterAdded:Wait()
-    task.wait(1.5)
-
-    local newHrp = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-    newHrp.CFrame = newLog.WoodSection.CFrame
+    local _, _, r2 = aliveChar()
+    if r2 then r2.CFrame = curpos end
     notify("Lonecave", "Lonecave brought", 3)
 end
 
@@ -787,6 +794,7 @@ end})
 Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
     _G.MasterActive = false
     _G.AbortAction = true
+    _G.GH_STOP = true
     _G.Flying = false
     _G.Noclip = false
     _G.InfJump = false
@@ -839,12 +847,12 @@ Tabs.Home:AddToggle("ViewLonecave", {
     end,
 })
 
-local woodNames = {"Lonecave","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie"}
+local woodNames = {"Lonecave","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
 local woodMap = {
     Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
     Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
     Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler",
-    SnowGlow = "SnowGlow", Zombie = "GreenSwampy",
+    SnowGlow = "SnowGlow", Zombie = "GreenSwampy", BlueSpruce = "BlueSpruce",
 }
 local selectedWood = "Generic"
 local woodAmount = 1
@@ -910,13 +918,29 @@ local function toggleSelect(model)
     end
 end
 
+local function isBringable(m)
+    if m.Name:sub(1, 6) == "Loose_" then return true end
+    if m:FindFirstChild("TreeClass") then return true end
+    if m:FindFirstChild("BoxItemName") then return true end
+    if m:FindFirstChild("PurchasedBoxItemName") then return true end
+    if m.Parent == workspace.PlayerModels and (m:FindFirstChild("Owner") or m:FindFirstChild("ItemName")) then
+        return true
+    end
+    return false
+end
+
+local function bringableModel(part)
+    local m = part and part:FindFirstAncestorOfClass("Model")
+    while m do
+        if isBringable(m) then return m end
+        m = m:FindFirstAncestorOfClass("Model")
+    end
+end
+
 track(LocalPlayer:GetMouse().Button1Down:Connect(function()
     if not SelectMode then return end
-    local target = LocalPlayer:GetMouse().Target
-    local model = target and target:FindFirstAncestorOfClass("Model")
-    if model and (model.Name:sub(1, 6) == "Loose_" or model:FindFirstChild("TreeClass")) then
-        toggleSelect(model)
-    end
+    local model = bringableModel(LocalPlayer:GetMouse().Target)
+    if model then toggleSelect(model) end
 end))
 
 Tabs.Bring:AddToggle("SelectMode", {
@@ -997,85 +1021,150 @@ local WALLHOP_SCRIPT = ""
 local searchTree = "LoneCave"
 local hopping = false
 
-local function treeOnServer(class)
+local SEARCH_BODY = [=====[
+if not game:IsLoaded() then game.Loaded:Wait() end
+local C = _G.GH_CFG
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+local FILE = "GreenHub_Search.txt"
+local queued = false
+
+local function say(t, x)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {Title = t, Text = x, Duration = 4})
+    end)
+end
+
+local function findTree(class)
     for _, region in ipairs(workspace:GetChildren()) do
         if region.Name == "TreeRegion" then
             for _, m in ipairs(region:GetChildren()) do
                 if m:FindFirstChild("TreeClass") and m.TreeClass.Value == class
                     and (not m:FindFirstChild("Owner") or m.Owner.Value == nil) then
-                    return true
+                    return m
                 end
             end
         end
     end
-    return false
 end
 
-local function hopServer()
+local function standCF(tree)
+    local low, lowY = nil, math.huge
+    for _, p in ipairs(tree:GetDescendants()) do
+        if p:IsA("BasePart") and p.CanCollide and p.Position.Y < lowY then
+            low, lowY = p, p.Position.Y
+        end
+    end
+    if low then return CFrame.new(low.Position + Vector3.new(4, 2, 0)) end
+    return CFrame.new(tree:GetPivot().Position + Vector3.new(5, 3, 0))
+end
+
+local function hop()
+    if not queue_on_teleport then return false end
     local ok, body = pcall(function()
         return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
     end)
     if not ok then return false end
-    local decoded = game:GetService("HttpService"):JSONDecode(body)
+    local okD, decoded = pcall(function() return HttpService:JSONDecode(body) end)
+    if not okD then return false end
     local options = {}
     for _, s in ipairs(decoded.data or {}) do
         if s.id ~= game.JobId and s.playing < s.maxPlayers then table.insert(options, s.id) end
     end
     if #options == 0 then return false end
-
-    local code = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    if WALLHOP_SCRIPT ~= "" then code = WALLHOP_SCRIPT .. "\n" .. code end
-    if queue_on_teleport then queue_on_teleport(code) end
+    if not queued then
+        queued = true
+        local cfg = string.format("{tree=%q,loadHub=%s,tpTree=%s,hubUrl=%q,wall=%q}",
+            C.tree, tostring(C.loadHub), tostring(C.tpTree), C.hubUrl, C.wall)
+        queue_on_teleport((C.wall ~= "" and (C.wall .. "\n") or "")
+            .. "_G.GH_CFG = " .. cfg .. "\n"
+            .. "_G.GH_SRC = " .. string.format("%q", _G.GH_SRC) .. "\n"
+            .. "loadstring(_G.GH_SRC)()")
+    end
     TeleportService:TeleportToPlaceInstance(game.PlaceId, options[math.random(#options)], LocalPlayer)
     return true
 end
 
+if not C.fromHub then
+    local t = tick()
+    repeat task.wait(0.1) until workspace:FindFirstChild("TreeRegion") or tick() - t > 4
+    task.wait(0.5)
+end
+
+while not _G.GH_STOP do
+    local tree = findTree(C.tree)
+    if tree then
+        pcall(delfile, FILE)
+        say("Green Hub", C.tree .. " tree found!")
+        if C.tpTree then
+            local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local hrp = char:WaitForChild("HumanoidRootPart", 5)
+            if hrp then hrp.CFrame = standCF(tree) end
+        end
+        if C.loadHub and not C.fromHub then
+            loadstring(game:HttpGet(C.hubUrl))()
+        end
+        return
+    end
+    say("Search", "No " .. C.tree .. " here, hopping...")
+    if not hop() then
+        say("Search", "No servers or queue_on_teleport unavailable")
+        return
+    end
+    task.wait(10)
+end
+]=====]
+
 local function stopSearch()
     hopping = false
+    _G.GH_STOP = true
     pcall(delfile, SEARCH_FILE)
 end
 
 local function runSearch(class)
     hopping = true
+    _G.GH_STOP = false
+    _G.GH_SRC = SEARCH_BODY
+    _G.GH_CFG = {
+        tree = class,
+        loadHub = Options.SearchLoadHub.Value,
+        tpTree = Options.SearchTeleport.Value,
+        hubUrl = HUB_URL,
+        wall = WALLHOP_SCRIPT,
+        fromHub = true,
+    }
     task.spawn(function()
-        task.wait(6)
-        while hopping and _G.MasterActive do
-            if treeOnServer(class) then
-                stopSearch()
-                notify("Search", class .. " tree found!", 6)
-                break
-            end
-            notify("Search", "No " .. class .. " here, hopping...", 2)
-            if not hopServer() then
-                stopSearch()
-                notify("Search", "No servers available", 3)
-                break
-            end
-            task.wait(15)
+        local fn, err = loadstring(SEARCH_BODY)
+        if not fn then
+            notify("Search", "Script error: " .. tostring(err), 4)
+            hopping = false
+            return
         end
+        local ok, e = pcall(fn)
+        if not ok then notify("Search", tostring(e), 4) end
+        hopping = false
     end)
 end
-
-task.spawn(function()
-    task.wait(2)
-    local ok, saved = pcall(function()
-        return isfile(SEARCH_FILE) and readfile(SEARCH_FILE) or nil
-    end)
-    if ok and saved and saved ~= "" then
-        searchTree = saved
-        runSearch(saved)
-    end
-end)
 
 Tabs.Search:AddDropdown("SearchTree", {
     Title = "Tree", Multi = false, Default = 16,
     Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost",
-        "GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","LoneCave"},
+        "GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","LoneCave","BlueSpruce"},
     Callback = function(v) searchTree = v end,
+})
+Tabs.Search:AddToggle("SearchTeleport", {
+    Title = "Teleport To Tree When Found", Default = false,
+    Callback = function() end,
+})
+Tabs.Search:AddToggle("SearchLoadHub", {
+    Title = "Load Green Hub If Tree Found", Default = false,
+    Callback = function() end,
 })
 Tabs.Search:AddButton({Title = "Start", Callback = function()
     if hopping then notify("Search", "Already running", 2) return end
-    pcall(writefile, SEARCH_FILE, searchTree)
     runSearch(searchTree)
 end})
 Tabs.Search:AddButton({Title = "Stop", Callback = function()
@@ -1617,13 +1706,13 @@ local function longWire()
     end
 end
 
-local function safeSuicide()
+local function safeSuicideTeleport()
     local char = LocalPlayer.Character
     if char then char:PivotTo(CFrame.new(3392, -397, -3389)) end
 end
 
 Tabs.Player:AddButton({Title = "Long Wire", Callback = longWire})
-Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicide})
+Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicideTeleport})
 Tabs.Player:AddButton({Title = "Reset Character", Callback = function()
     local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if hum then hum.Health = 0 end
@@ -1851,7 +1940,7 @@ local farmStatus = Tabs.Farm:AddParagraph({Title = "Farm Status", Content = "OFF
 
 Tabs.Farm:AddDropdown("FarmWood", {
     Title = "Target Wood",
-    Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy"},
+    Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"},
     Multi = false, Default = 1,
     Callback = function(v) autoFarmWoodType = v end,
 })
@@ -1887,12 +1976,12 @@ Tabs.Farm:AddToggle("AutoFarm", {
                     end
                     local newLog
                     local con = workspace.LogModels.ChildAdded:Connect(function(l)
-                        task.wait()
-                        if l:FindFirstChild("Owner") and l.Owner.Value == LocalPlayer then newLog = l end
+                        local o = l:WaitForChild("Owner", 2)
+                        if o and o.Value == LocalPlayer then newLog = l end
                     end)
+                    local sc = treeStandCF(target)
                     local lp = RunService.Heartbeat:Connect(function()
-                        local sc = treeStandCF(target)
-                        if sc then hrp.CFrame = sc end
+                        hrp.CFrame = sc
                     end)
                     local timeout = 0
                     repeat
@@ -1902,7 +1991,7 @@ Tabs.Farm:AddToggle("AutoFarm", {
                         })
                         task.wait(stats.SwingCooldown)
                         timeout += stats.SwingCooldown
-                    until newLog ~= nil or timeout > 30
+                    until newLog ~= nil or timeout > 30 or not autoFarmActive
                     lp:Disconnect()
                     con:Disconnect()
                     task.wait(0.2)
@@ -2035,12 +2124,17 @@ Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function()
     notify("Dupe", "Axe dupe is patched", 3)
 end})
 
+local hubCache
 local function getHub()
+    if hubCache and hubCache.Parent then return hubCache end
     for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
         for _, gui in ipairs(parent:GetChildren()) do
             if gui:IsA("ScreenGui") then
                 for _, d in ipairs(gui:GetDescendants()) do
-                    if d:IsA("TextLabel") and d.Text:find("Green Hub") then return gui end
+                    if d:IsA("TextLabel") and d.Text:find("Green Hub") then
+                        hubCache = gui
+                        return gui
+                    end
                 end
             end
         end
