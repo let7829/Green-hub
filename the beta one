@@ -1747,6 +1747,23 @@ local chopCooldown = {}
 local activeCount = 0
 local chopLoopId = 0
 
+local allChopTypes = {
+    "Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple",
+    "Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler",
+    "GreenSwampy","SnowGlow","Zombie","BlueSpruce",
+}
+local selectedChopTypes = {}
+local chopAnyType = true
+
+local function typeAllowed(clas)
+    if clas == "LoneCave" then return false end
+    if chopAnyType then return true end
+    for _, v in ipairs(selectedChopTypes) do
+        if v == clas then return true end
+    end
+    return false
+end
+
 local function treeFree(t)
     local o = t:FindFirstChild("Owner")
     return not o or o.Value == nil or o.Value == LocalPlayer
@@ -1760,7 +1777,7 @@ local function nearbyTrees(count)
         if region.Name == "TreeRegion" then
             for _, t in ipairs(region:GetChildren()) do
                 if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass")
-                    and t.TreeClass.Value ~= "LoneCave" and not choppingNow[t]
+                    and typeAllowed(t.TreeClass.Value) and not choppingNow[t]
                     and (chopCooldown[t] or 0) < tick() and treeFree(t) then
                     local d = (t:GetPivot().Position - hrp.Position).Magnitude
                     if d <= CHOP_RANGE then table.insert(list, {tree = t, dist = d}) end
@@ -1780,23 +1797,49 @@ local function chopTree(tree, loopId)
     pcall(function()
         local clas = tree.TreeClass.Value
         local started = tick()
-        while autoChopOn and chopLoopId == loopId and _G.MasterActive and tree.Parent
-            and tree:FindFirstChild("CutEvent") and treeFree(tree) and tick() - started < 40 do
+        while autoChopOn and chopLoopId == loopId and _G.MasterActive
+            and tree.Parent and tree:FindFirstChild("CutEvent")
+            and treeFree(tree) and tick() - started < 40 do
             local ax = getEquippedOrBackpackAxe()
-            if not ax then break end
-            local stats = getAxStats(ax.ToolName.Value, clas)
-            if not stats then break end
-            ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-            })
-            task.wait(stats.SwingCooldown)
+            local stats = ax and getAxStats(ax.ToolName.Value, clas)
+            if ax and stats and stats.Damage and stats.SwingCooldown then
+                pcall(function()
+                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+                        tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0),
+                        sectionId = 1, hitPoints = stats.Damage,
+                        cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+                    })
+                end)
+                task.wait(stats.SwingCooldown)
+            else
+                task.wait(0.3)
+            end
         end
     end)
     chopCooldown[tree] = tick() + 20
     choppingNow[tree] = nil
     activeCount -= 1
 end
+
+Tabs.AutoChop:AddDropdown("ChopTypes", {
+    Title = "Wood Types (empty = all)",
+    Multi = true,
+    Default = {},
+    Values = allChopTypes,
+    Callback = function(v)
+        selectedChopTypes = {}
+        local n = 0
+        if type(v) == "table" then
+            for name, on in pairs(v) do
+                if on then
+                    table.insert(selectedChopTypes, name)
+                    n += 1
+                end
+            end
+        end
+        chopAnyType = n == 0
+    end,
+})
 
 Tabs.AutoChop:AddToggle("AutoChopToggle", {
     Title = "Auto Chop", Default = false,
@@ -2461,6 +2504,35 @@ task.spawn(function()
     end
     if data then applyConfig(data) end
     cfgReady = true
+end)
+
+pcall(function()
+    local base = Fluent.Themes and (Fluent.Themes.Darker or Fluent.Themes.Dark)
+    if not base then return end
+    local t = {}
+    for k, v in pairs(base) do t[k] = v end
+    t.Accent = Color3.fromRGB(0, 255, 0)
+    t.AcrylicMain = Color3.fromRGB(0, 0, 0)
+    t.Window = Color3.fromRGB(0, 0, 0)
+    t.TitleBar = Color3.fromRGB(0, 0, 0)
+    t.TabBar = Color3.fromRGB(0, 0, 0)
+    t.Tab = Color3.fromRGB(0, 0, 0)
+    t.TabBgTransparency = 1
+    t.TabBorderTransparency = 1
+    t.Element = Color3.fromRGB(10, 10, 10)
+    t.ElementBorder = Color3.fromRGB(30, 30, 30)
+    t.TabActive = Color3.fromRGB(30, 30, 30)
+    t.TabActiveBorder = Color3.fromRGB(0, 255, 0)
+    t.TabActiveText = Color3.fromRGB(0, 255, 0)
+    t.TabActiveIcon = Color3.fromRGB(0, 255, 0)
+    t.TabIcon = Color3.fromRGB(0, 255, 0)
+    t.TabText = Color3.fromRGB(255, 255, 255)
+    t.TitleBarText = Color3.fromRGB(255, 255, 255)
+    t.ElementButtonBorder = Color3.fromRGB(0, 255, 0)
+    t.ElementToggle = Color3.fromRGB(0, 255, 0)
+    Fluent.Themes.Amoled = t
+    local okTheme = pcall(function() Fluent:SetTheme("Amoled") end)
+    if not okTheme then pcall(function() Window:SetTheme("Amoled") end) end
 end)
 
 Window:SelectTab(1)
