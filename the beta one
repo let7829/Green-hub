@@ -61,24 +61,23 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Home       = Window:AddTab({Title = "Home"}),
-    Wood       = Window:AddTab({Title = "Wood"}),
-    AutoChop   = Window:AddTab({Title = "Auto Chop"}),
-    Farm       = Window:AddTab({Title = "Farm"}),
-    Player     = Window:AddTab({Title = "Player"}),
-    Teleport   = Window:AddTab({Title = "Teleport"}),
-    Autobuy    = Window:AddTab({Title = "Autobuy"}),
-    Vehicle    = Window:AddTab({Title = "Vehicle"}),
-    World      = Window:AddTab({Title = "World"}),
-    Visuals    = Window:AddTab({Title = "Visuals"}),
-    OnScreen   = Window:AddTab({Title = "OnScreen"}),
-    Automation = Window:AddTab({Title = "Automation"}),
-    Bring      = Window:AddTab({Title = "Bring"}),
-    Search     = Window:AddTab({Title = "Search"}),
-    Slots      = Window:AddTab({Title = "Slots"}),
-    Misc       = Window:AddTab({Title = "Misc"}),
-    Dupe       = Window:AddTab({Title = "Dupe"}),
-    Settings   = Window:AddTab({Title = "Settings"}),
+    Home       = Window:AddTab({Title = "Home",       Icon = "home"}),
+    Wood       = Window:AddTab({Title = "Wood",       Icon = "trees"}),
+    Farm       = Window:AddTab({Title = "Farm",       Icon = "sprout"}),
+    Player     = Window:AddTab({Title = "Player",     Icon = "user"}),
+    Teleport   = Window:AddTab({Title = "Teleport",   Icon = "map-pin"}),
+    Autobuy    = Window:AddTab({Title = "Autobuy",    Icon = "shopping-cart"}),
+    Vehicle    = Window:AddTab({Title = "Vehicle",    Icon = "car"}),
+    World      = Window:AddTab({Title = "World",      Icon = "globe"}),
+    Visuals    = Window:AddTab({Title = "Visuals",    Icon = "eye"}),
+    OnScreen   = Window:AddTab({Title = "OnScreen",   Icon = "monitor"}),
+    Automation = Window:AddTab({Title = "Automation", Icon = "repeat"}),
+    Bring      = Window:AddTab({Title = "Bring",      Icon = "package"}),
+    Search     = Window:AddTab({Title = "Search",     Icon = "search"}),
+    Slots      = Window:AddTab({Title = "Slots",      Icon = "save"}),
+    Misc       = Window:AddTab({Title = "Misc",       Icon = "wrench"}),
+    Dupe       = Window:AddTab({Title = "Dupe",       Icon = "copy"}),
+    Settings   = Window:AddTab({Title = "Settings",   Icon = "settings"}),
 }
 
 local Options = Fluent.Options
@@ -386,28 +385,32 @@ local function bringAllLoose()
     notify("Wood", "Brought " .. count .. " logs")
 end
 
-local SELL_POS = Vector3.new(315, -0.296, 85.791)
+local SELL_CF = CFrame.new(315, -0.296, 85.791) * CFrame.Angles(math.rad(90), 0, 0)
+
 local function sellEverything()
+    local count = 0
     for _, Log in pairs(workspace.LogModels:GetChildren()) do
         if Log.Name:sub(1, 6) == "Loose_" and Log:FindFirstChild("Owner")
             and Log.Owner.Value == LocalPlayer then
             local section = Log:FindFirstChild("WoodSection")
             if section then
+                count += 1
                 task.spawn(function()
-                    for _ = 1, 10 do
+                    for _ = 1, 20 do
                         task.wait()
-                        section.CFrame = CFrame.new(SELL_POS) * CFrame.Angles(math.rad(90), 0, 0)
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        local delta = SELL_CF * section.CFrame:Inverse()
+                        for _, child in ipairs(Log:GetChildren()) do
+                            if child:IsA("BasePart") or child:IsA("Model") then
+                                child:PivotTo(delta * child:GetPivot())
+                            end
+                        end
                     end
                 end)
             end
-            task.spawn(function()
-                for _ = 1, 20 do
-                    task.wait()
-                    ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
-                end
-            end)
         end
     end
+    notify("Sell", "Sending " .. count .. " logs", 3)
 end
 
 local function getEquippedOrBackpackAxe()
@@ -497,267 +500,7 @@ local function lonecaveTree()
     end
 end
 
-local function aliveChar()
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if char and hum and hrp and hum.Health > 0 then
-        return char, hum, hrp
-    end
-end
-
-local function findEndTimesAxe(container)
-    if not container then return end
-    for _, v in ipairs(container:GetChildren()) do
-        if v:FindFirstChild("ToolName") and v.ToolName.Value == "EndTimesAxe" then
-            return v
-        end
-    end
-end
-
-local function droppedEndTimesAxe()
-    for _, v in ipairs(workspace:GetChildren()) do
-        if (v:IsA("Tool") or v:IsA("Model")) and v:FindFirstChild("ToolName")
-            and v.ToolName.Value == "EndTimesAxe" then
-            return v
-        end
-    end
-end
-
-local function pickupAxe(axe)
-    local _, _, hrp = aliveChar()
-    local part = axe:FindFirstChild("Handle") or axe:FindFirstChildWhichIsA("BasePart")
-    if not hrp or not part then return end
-    hrp.CFrame = part.CFrame + Vector3.new(0, 3, 0)
-    task.wait(0.3)
-    hrp.CFrame = part.CFrame
-    task.wait(0.5)
-end
-
-local function bringLonecave()
-    _G.AbortAction = false
-    local tree = lonecaveTree()
-    if not tree then notify("Lonecave", "Lonecave tree not found", 3) return end
-    local stats = getAxStats("EndTimesAxe", "LoneCave")
-    if not stats then notify("Lonecave", "No axe stats", 3) return end
-
-    local _, _, startHrp = aliveChar()
-    if not startHrp then notify("Lonecave", "No character", 2) return end
-    local curpos = startHrp.CFrame
-
-    local newLog
-    local con = workspace.LogModels.ChildAdded:Connect(function(l)
-        local o = l:WaitForChild("Owner", 2)
-        if o and o.Value == LocalPlayer then newLog = l end
-    end)
-
-    local fails = 0
-    while not newLog and not _G.AbortAction do
-        local char, hum, hrp = aliveChar()
-        if not char then
-            task.wait(1)
-        else
-            if not findEndTimesAxe(char) then
-                local dropped = droppedEndTimesAxe()
-                if dropped then pickupAxe(dropped) end
-                local inPack = findEndTimesAxe(LocalPlayer.Backpack)
-                if inPack and aliveChar() then
-                    aliveChar():FindFirstChildOfClass("Humanoid"):EquipTool(inPack)
-                    task.wait(0.3)
-                end
-            end
-
-            char, hum, hrp = aliveChar()
-            local ax = char and findEndTimesAxe(char)
-            if not ax then
-                fails += 1
-                if fails > 5 then
-                    notify("Lonecave", "Could not get the EndTimesAxe back", 3)
-                    break
-                end
-                task.wait(1)
-            else
-                fails = 0
-                local sc = treeStandCF(tree)
-                if sc then hrp.CFrame = sc end
-                task.wait(0.25)
-
-                local deadline = tick() + 60
-                repeat
-                    local c = aliveChar()
-                    local a = c and findEndTimesAxe(c)
-                    if not a then break end
-                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                        tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                    })
-                    task.wait(stats.SwingCooldown)
-                until newLog or _G.AbortAction or tick() > deadline
-            end
-        end
-    end
-    con:Disconnect()
-
-    if not newLog then
-        local c = aliveChar()
-        if c then c.HumanoidRootPart.CFrame = curpos end
-        notify("Lonecave", _G.AbortAction and "Aborted" or "Stopped", 2)
-        return
-    end
-
-    task.wait(0.15)
-    task.spawn(function()
-        for _ = 1, 60 do
-            ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
-            task.wait()
-        end
-    end)
-    task.wait(0.1)
-
-    newLog.PrimaryPart = newLog.WoodSection
-    for _ = 1, 60 do
-        newLog.PrimaryPart.Velocity = Vector3.zero
-        newLog:PivotTo(curpos)
-        task.wait()
-    end
-
-    local char = LocalPlayer.Character
-    if char then
-        char.Humanoid:UnequipTools()
-        task.wait()
-        char.Head:Destroy()
-    end
-    LocalPlayer.CharacterAdded:Wait()
-    task.wait(1.5)
-
-    local newHrp = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-    newHrp.CFrame = newLog.WoodSection.CFrame
-    notify("Lonecave", "Lonecave brought", 3)
-end
-
 local VOID_CF = CFrame.new(3392, -397, -3389)
-
-local function runSafeSuicide()
-    local char, hum, hrp = aliveChar()
-    if not char then return end
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.CFrame = VOID_CF
-    task.spawn(function()
-        local t = tick()
-        while tick() - t < 3 do
-            local c, h, r = aliveChar()
-            if not c or c ~= char then return end
-            r.AssemblyLinearVelocity = Vector3.zero
-            r.CFrame = VOID_CF
-            task.wait()
-        end
-        local c, h = aliveChar()
-        if c == char and h then h.Health = 0 end
-    end)
-end
-
-local function bringLonecaveSuicide()
-    _G.AbortAction = false
-    if _G.Flying and Options.FlyToggle then Options.FlyToggle:SetValue(false) end
-    local tree = lonecaveTree()
-    if not tree then notify("Lonecave", "Lonecave tree not found", 3) return end
-    local stats = getAxStats("EndTimesAxe", "LoneCave")
-    if not stats then notify("Lonecave", "No axe stats", 3) return end
-    local _, _, startHrp = aliveChar()
-    if not startHrp then notify("Lonecave", "No character", 2) return end
-    local curpos = startHrp.CFrame
-
-    local newLog
-    local con = workspace.LogModels.ChildAdded:Connect(function(l)
-        local o = l:WaitForChild("Owner", 2)
-        if o and o.Value == LocalPlayer then newLog = l end
-    end)
-
-    local function getAxe()
-        local c, h = aliveChar()
-        if not c then return nil end
-        local a = findEndTimesAxe(c)
-        if a then return a end
-        a = findEndTimesAxe(LocalPlayer.Backpack)
-        if not a then
-            local dropped = droppedEndTimesAxe()
-            if dropped then pickupAxe(dropped) end
-            a = findEndTimesAxe(LocalPlayer.Backpack)
-        end
-        if a then
-            h:EquipTool(a)
-            task.wait(0.3)
-            local c2 = aliveChar()
-            return c2 and findEndTimesAxe(c2)
-        end
-    end
-
-    while not newLog and not _G.AbortAction do
-        if not tree.Parent then break end
-        if not aliveChar() then
-            task.wait(1)
-        else
-            local ax = getAxe()
-            if not ax or not aliveChar() then
-                task.wait(1)
-            else
-                local sc = treeStandCF(tree)
-                local glue = RunService.Heartbeat:Connect(function()
-                    local _, _, r = aliveChar()
-                    if r then r.CFrame = sc end
-                end)
-                task.wait(0.25)
-                local chopStart = tick()
-                local last = 0
-                while not newLog and not _G.AbortAction and tick() - chopStart < 3 do
-                    local c = aliveChar()
-                    local a = c and findEndTimesAxe(c)
-                    if not a then break end
-                    if tick() - last >= stats.SwingCooldown then
-                        ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                            tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                            hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                        })
-                        last = tick()
-                    end
-                    task.wait()
-                end
-                glue:Disconnect()
-                if not newLog and not _G.AbortAction and tick() - chopStart >= 3 and aliveChar() then
-                    runSafeSuicide()
-                    task.wait(6)
-                end
-            end
-        end
-    end
-    con:Disconnect()
-
-    if not newLog then
-        local _, _, r = aliveChar()
-        if r then r.CFrame = curpos end
-        notify("Lonecave", _G.AbortAction and "Aborted" or "Stopped", 2)
-        return
-    end
-
-    task.wait(0.2)
-    local waited = tick()
-    while not aliveChar() and tick() - waited < 10 do task.wait(0.2) end
-    local _, _, hrp = aliveChar()
-    if hrp and newLog.Parent then
-        local part = newLog:FindFirstChild("WoodSection") or newLog:FindFirstChildWhichIsA("BasePart")
-        if part then hrp.CFrame = part.CFrame + Vector3.new(0, 5, 0) end
-        task.wait(0.2)
-    end
-    for _ = 1, 60 do
-        if _G.AbortAction then break end
-        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
-        newLog:PivotTo(curpos)
-        task.wait()
-    end
-    local _, _, r2 = aliveChar()
-    if r2 then r2.CFrame = curpos end
-    notify("Lonecave", "Lonecave brought", 3)
-end
 
 Tabs.Home:AddButton({Title = "Load RTX Graphics", Callback = function()
     loadstring(game:HttpGet("https://pastebin.com/raw/kH90gD5d"))()
@@ -776,10 +519,7 @@ Tabs.Home:AddButton({Title = "Copy Server Link", Callback = function()
     notify("Copied", "Server link copied")
 end})
 Tabs.Home:AddButton({Title = "Bring All Loose Wood", Callback = bringAllLoose})
-Tabs.Home:AddButton({Title = "Sell Everything", Callback = function()
-    sellEverything()
-    notify("Selling", "Selling everything...")
-end})
+Tabs.Home:AddButton({Title = "Sell Everything", Callback = sellEverything})
 Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
     _G.MasterActive = false
     _G.AbortAction = true
@@ -837,7 +577,7 @@ Tabs.Home:AddToggle("ViewLonecave", {
     end,
 })
 
-local woodNames = {"Lonecave","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
+local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
 local woodMap = {
     Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
     Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
@@ -846,20 +586,10 @@ local woodMap = {
 }
 local selectedWood = "Generic"
 local woodAmount = 1
-local lonecaveMethod = "Safe Suicide"
 
 Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
     _G.AbortAction = false
     task.spawn(function()
-        if selectedWood == "Lonecave" then
-            if lonecaveMethod == "Safe Suicide" then
-                bringLonecaveSuicide()
-            else
-                bringLonecave()
-            end
-            return
-        end
-        if woodAmount < 1 then notify("Wood", "Set amount above 0", 2) return end
         for _ = 1, woodAmount do
             if _G.AbortAction then break end
             bringWood(woodMap[selectedWood])
@@ -871,117 +601,15 @@ Tabs.Wood:AddButton({Title = "Abort", Callback = function()
     notify("Wood", "Aborting...", 2)
 end})
 Tabs.Wood:AddDropdown("WoodPick", {
-    Title = "Wood Type", Values = woodNames, Multi = false, Default = 2,
+    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
     Callback = function(v) selectedWood = v end,
 })
 Tabs.Wood:AddSlider("WoodAmount", {
     Title = "Amount", Default = 1, Min = 1, Max = 30, Rounding = 0,
     Callback = function(v) woodAmount = v end,
 })
-Tabs.Wood:AddDropdown("LonecaveMethod", {
-    Title = "Lonecave Method", Multi = false, Default = 2,
-    Values = {"Teleport Pickup", "Safe Suicide"},
-    Callback = function(v) lonecaveMethod = v end,
-})
 Tabs.Wood:AddButton({Title = "Bring All Wood", Callback = bringAllLoose})
-Tabs.Wood:AddButton({Title = "Sell Everything", Callback = function()
-    sellEverything()
-    notify("Selling", "Selling...")
-end})
-
-local AUTO_CHOP_WOOD = {
-    Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
-    Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
-    Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler",
-    SnowGlow = "SnowGlow", Zombie = "GreenSwampy", BlueSpruce = "BlueSpruce",
-}
-local chopWoodNames = {}
-for name in pairs(AUTO_CHOP_WOOD) do table.insert(chopWoodNames, name) end
-table.sort(chopWoodNames)
-
-local autoChopOn = false
-local chopWood = "Generic"
-local CHOP_RANGE = 80
-local MAX_AT_ONCE = 10
-local choppingNow = {}
-local activeCount = 0
-local chopLoopId = 0
-
-local function nearestTrees(clas, count)
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return {} end
-    local list = {}
-    for _, region in ipairs(workspace:GetChildren()) do
-        if region.Name == "TreeRegion" then
-            for _, t in ipairs(region:GetChildren()) do
-                if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass")
-                    and t.TreeClass.Value == clas and not choppingNow[t]
-                    and (not t:FindFirstChild("Owner") or t.Owner.Value == nil) then
-                    local d = (t:GetPivot().Position - hrp.Position).Magnitude
-                    if d <= CHOP_RANGE then table.insert(list, {tree = t, dist = d}) end
-                end
-            end
-        end
-    end
-    table.sort(list, function(a, b) return a.dist < b.dist end)
-    local out = {}
-    for i = 1, math.min(count, #list) do out[i] = list[i].tree end
-    return out
-end
-
-local function chopTree(tree, clas, loopId)
-    choppingNow[tree] = true
-    activeCount += 1
-    local started = tick()
-    while autoChopOn and chopLoopId == loopId and _G.MasterActive and tree.Parent
-        and tick() - started < 30
-        and (not tree:FindFirstChild("Owner") or tree.Owner.Value == nil) do
-        local ax = getEquippedOrBackpackAxe()
-        if not ax then break end
-        local stats = getAxStats(ax.ToolName.Value, clas)
-        if not stats then break end
-        ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-            tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-            hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-        })
-        task.wait(stats.SwingCooldown)
-    end
-    choppingNow[tree] = nil
-    activeCount -= 1
-end
-
-local function startChopLoop()
-    chopLoopId += 1
-    local loopId = chopLoopId
-    task.spawn(function()
-        while autoChopOn and chopLoopId == loopId and _G.MasterActive do
-            local clas = AUTO_CHOP_WOOD[chopWood]
-            local slots = MAX_AT_ONCE - activeCount
-            if clas and slots > 0 and getEquippedOrBackpackAxe() then
-                for _, tree in ipairs(nearestTrees(clas, slots)) do
-                    task.spawn(chopTree, tree, clas, loopId)
-                end
-            end
-            task.wait(0.5)
-        end
-    end)
-end
-
-Tabs.AutoChop:AddDropdown("ChopWood", {
-    Title = "Wood Type", Values = chopWoodNames, Multi = false, Default = 1,
-    Callback = function(v) chopWood = v end,
-})
-Tabs.AutoChop:AddToggle("AutoChopToggle", {
-    Title = "Auto Chop", Default = false,
-    Callback = function(s)
-        autoChopOn = s
-        if s then
-            startChopLoop()
-        else
-            chopLoopId += 1
-        end
-    end,
-})
+Tabs.Wood:AddButton({Title = "Sell Everything", Callback = sellEverything})
 
 local SelectMode = false
 local selectedItems = {}
@@ -2186,40 +1814,7 @@ Tabs.Misc:AddButton({Title = "Print All Remotes", Callback = function()
     end
     notify("Misc", "Remotes printed to console")
 end})
-
-local SELL_CF = CFrame.new(315, -0.296, 85.791) * CFrame.Angles(math.rad(90), 0, 0)
-
-local function sellAllBeta()
-    local count = 0
-    for _, Log in pairs(workspace.LogModels:GetChildren()) do
-        if Log.Name:sub(1, 6) == "Loose_" and Log:FindFirstChild("Owner")
-            and Log.Owner.Value == LocalPlayer then
-            local section = Log:FindFirstChild("WoodSection")
-            if section then
-                count += 1
-                task.spawn(function()
-                    for _ = 1, 20 do
-                        task.wait()
-                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
-                        local delta = SELL_CF * section.CFrame:Inverse()
-                        for _, child in ipairs(Log:GetChildren()) do
-                            if child:IsA("BasePart") or child:IsA("Model") then
-                                child:PivotTo(delta * child:GetPivot())
-                            end
-                        end
-                    end
-                end)
-            end
-        end
-    end
-    notify("Sell All", "Sending " .. count .. " logs", 3)
-end
-
-Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = sellAllBeta})
-
-Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function()
-    notify("Dupe", "Axe dupe is patched", 3)
-end})
+Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = sellEverything})
 
 local hubCache
 local function getHub()
@@ -2351,6 +1946,7 @@ local ToggleGui = Instance.new("ScreenGui")
 ToggleGui.Name = "GreenHubToggle"
 ToggleGui.ResetOnSpawn = false
 ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ToggleGui.Enabled = false
 
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Name = "OpenClose"
@@ -2411,23 +2007,9 @@ Tabs.Settings:AddToggle("Transparent", {
     Title = "Transparent", Default = false,
     Callback = function(s) _G.HubTransparent = s end,
 })
-Tabs.Settings:AddDropdown("Theme", {
-    Title = "Theme", Multi = false, Default = 1,
-    Values = {"Amoled","Dark","Darker","Light","Aqua","Amethyst","Rose"},
-    Callback = function(v)
-        _G.ForceBlack = (v == "Amoled")
-        pcall(function() Fluent:SetTheme(v) end)
-        if not _G.ForceBlack then
-            local hub = getHub()
-            if hub then
-                for _, d in ipairs(hub:GetDescendants()) do
-                    if d:IsA("Frame") and d.AbsoluteSize.X > 400 then
-                        d.BackgroundColor3 = Fluent.Theme and Fluent.Theme.AcrylicMain or d.BackgroundColor3
-                    end
-                end
-            end
-        end
-    end,
+Tabs.Settings:AddToggle("ShowToggleBtn", {
+    Title = "Open/Close Button", Default = false,
+    Callback = function(s) ToggleGui.Enabled = s end,
 })
 Tabs.Settings:AddDropdown("TogglePos", {
     Title = "Open/Close Position", Multi = false, Default = 1,
@@ -2444,31 +2026,46 @@ Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fl
 
 local paintSaved = {}
 local paintMode = "none"
+local outlineColor = Color3.fromRGB(0, 255, 0)
+local GREEN = Color3.fromRGB(0, 255, 0)
+local switching = false
 
 local function findHubRoot()
     for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
         for _, gui in ipairs(parent:GetDescendants()) do
             if gui:IsA("TextLabel") and gui.Text == "Green Hub" then
-                local root = gui
-                while root.Parent and not root.Parent:IsA("ScreenGui") do
-                    root = root.Parent
-                end
-                if root.Parent and root.Parent:IsA("ScreenGui") then
-                    return root.Parent
-                end
+                local sg = gui:FindFirstAncestorOfClass("ScreenGui")
+                if sg then return sg end
             end
         end
     end
 end
 
+local function rootStroke(hub)
+    local root
+    for _, c in ipairs(hub:GetChildren()) do
+        if c:IsA("GuiObject") and (not root or c.AbsoluteSize.X > root.AbsoluteSize.X) then root = c end
+    end
+    if not root then return end
+    local s = root:FindFirstChild("GH_Outline")
+    if not s then
+        s = Instance.new("UIStroke")
+        s.Name = "GH_Outline"
+        s.Thickness = 2
+        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        s.Parent = root
+    end
+    return s
+end
+
 local function setPaint(mode)
     local hub = findHubRoot() or getHub()
-    if not hub then
-        notify("Paint", "Hub not found", 2)
-        return
+    if not hub then notify("Paint", "Hub not found", 2) return end
+    local gs = rootStroke(hub)
+    if gs then
+        gs.Enabled = mode ~= "none"
+        gs.Color = outlineColor
     end
-    local green = Color3.fromRGB(0, 255, 0)
-    local black = Color3.new(0, 0, 0)
     for _, d in ipairs(hub:GetDescendants()) do
         if not paintSaved[d] then
             paintSaved[d] = {
@@ -2478,17 +2075,17 @@ local function setPaint(mode)
             }
         end
         local o = paintSaved[d]
-        if d:IsA("UIStroke") then
-            d.Color = (mode == "none") and o.stroke or green
+        if d:IsA("UIStroke") and d.Name ~= "GH_Outline" then
+            d.Color = (mode == "none") and o.stroke or outlineColor
         elseif d:IsA("GuiObject") and o.bg then
             if mode == "full" and d.BackgroundTransparency < 1 then
-                d.BackgroundColor3 = green
+                d.BackgroundColor3 = GREEN
             elseif mode ~= "full" then
                 d.BackgroundColor3 = o.bg
             end
         end
         if o.text then
-            d.TextColor3 = (mode == "full") and black or o.text
+            d.TextColor3 = (mode == "full") and Color3.new(0, 0, 0) or o.text
         end
     end
 end
@@ -2501,7 +2098,6 @@ end
 local ultraOn = false
 local ultraSaved = {}
 local ultraConn
-local GREEN = Color3.fromRGB(0, 255, 0)
 
 local function setProp(inst, prop, value)
     if not ultraSaved[inst] then ultraSaved[inst] = {} end
@@ -2560,13 +2156,25 @@ local function applyUltra(on)
     end
 end
 
+Tabs.Settings:AddColorpicker("OutlineColor", {
+    Title = "Outline Color", Default = outlineColor,
+    Callback = function(v)
+        outlineColor = v
+        if paintMode ~= "none" then setPaint(paintMode) end
+    end,
+})
+
 Tabs.Settings:AddToggle("GreenOutline", {
     Title = "Green Green Hub", Default = false,
     Callback = function(s)
+        if switching then return end
         if s then
-            applyPaint("outline")
+            switching = true
             Options.GreenFull:SetValue(false)
             Options.GreenUltra:SetValue(false)
+            switching = false
+            if ultraOn then applyUltra(false) end
+            applyPaint("outline")
         elseif paintMode == "outline" then
             applyPaint("none")
         end
@@ -2575,10 +2183,14 @@ Tabs.Settings:AddToggle("GreenOutline", {
 Tabs.Settings:AddToggle("GreenFull", {
     Title = "Green Green Green Hub", Default = false,
     Callback = function(s)
+        if switching then return end
         if s then
-            applyPaint("full")
+            switching = true
             Options.GreenOutline:SetValue(false)
             Options.GreenUltra:SetValue(false)
+            switching = false
+            if ultraOn then applyUltra(false) end
+            applyPaint("full")
         elseif paintMode == "full" then
             applyPaint("none")
         end
@@ -2587,9 +2199,12 @@ Tabs.Settings:AddToggle("GreenFull", {
 Tabs.Settings:AddToggle("GreenUltra", {
     Title = "Green Green Green Green Hub", Default = false,
     Callback = function(s)
+        if switching then return end
         if s then
+            switching = true
             Options.GreenOutline:SetValue(false)
             Options.GreenFull:SetValue(false)
+            switching = false
             applyPaint("full")
             applyUltra(true)
         else
