@@ -2042,48 +2042,17 @@ Tabs.Settings:AddDropdown("TogglePos", {
 })
 Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
 
-task.spawn(function()
-    task.wait(1)
-    while _G.MasterActive do
-        if Fluent.GUI and Fluent.GUI.Parent then
-            for _, d in ipairs(Fluent.GUI:GetDescendants()) do
-                if d:IsA("GuiObject") then
-                    local c = d:FindFirstChildOfClass("UICorner")
-                    if not c then
-                        c = Instance.new("UICorner")
-                        c.Parent = d
-                    end
-                    pcall(function()
-                        if c.CornerRadius.Scale < 0.9 then
-                            c.CornerRadius = UDim.new(0, 14)
-                        end
-                    end)
-                end
-            end
-        end
-        task.wait(1)
+local function roundOne(d)
+    if not d:IsA("GuiObject") then return end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c then
+        c = Instance.new("UICorner")
+        c.Parent = d
     end
-end)
-
-if Fluent.GUI then
-    track(Fluent.GUI.DescendantAdded:Connect(function(d)
-        if d:IsA("GuiObject") then
-            task.defer(function()
-                if d.Parent then
-                    local c = d:FindFirstChildOfClass("UICorner")
-                    if not c then
-                        c = Instance.new("UICorner")
-                        c.Parent = d
-                    end
-                    pcall(function()
-                        if c.CornerRadius.Scale < 0.9 then
-                            c.CornerRadius = UDim.new(0, 14)
-                        end
-                    end)
-                end
-            end)
-        end
-    end))
+    if c.CornerRadius.Scale >= 0.5 then return end
+    if c.CornerRadius.Offset < 14 then
+        c.CornerRadius = UDim.new(0, 14)
+    end
 end
 
 local paintSaved = setmetatable({}, {__mode = "k"})
@@ -2091,30 +2060,50 @@ local paintMode = "none"
 local outlineColor = Color3.fromRGB(0, 255, 0)
 local GREEN = Color3.fromRGB(0, 255, 0)
 local LIME = Color3.fromRGB(0, 255, 0)
-local BLACKBG = Color3.fromRGB(0, 0, 0)
-local switching = false
+local blackActive = false
+local blackSaved = setmetatable({}, {__mode = "k"})
 
-local function rootStroke()
-    local root = hubRoot()
-    if not root then return end
-    local s = root:FindFirstChild("GH_Outline")
-    if not s then
-        s = Instance.new("UIStroke")
-        s.Name = "GH_Outline"
-        s.Thickness = 2
-        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        s.Parent = root
-    end
-    return s
+local function isToggleTrack(d)
+    if not d:IsA("Frame") then return false end
+    if not d.ClipsDescendants then return false end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c or c.CornerRadius.Scale < 0.5 then return false end
+    local sy = d.AbsoluteSize.Y
+    return sy >= 16 and sy <= 36
 end
 
-local function isSwitchElement(d)
-    if not d:IsA("Frame") then return false end
-    local sy = d.Size.Y.Offset
-    local sx = d.Size.X.Offset
-    if sy < 8 or sy > 32 then return false end
-    if sx < 8 or sx > 120 then return false end
-    return true
+local function paintBlackOne(d)
+    if not blackActive then return end
+    if not d:IsA("GuiObject") then return end
+    if d.BackgroundTransparency >= 1 then return end
+    if not blackSaved[d] then blackSaved[d] = d.BackgroundColor3 end
+    if isToggleTrack(d) then
+        d.BackgroundColor3 = LIME
+    else
+        d.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    end
+end
+
+local function setBlack(on)
+    blackActive = on
+    if not on then
+        for d, c in pairs(blackSaved) do
+            pcall(function() if d and d.Parent then d.BackgroundColor3 = c end end)
+        end
+        table.clear(blackSaved)
+        return
+    end
+    local hub = getHub()
+    if not hub then return end
+    if Window.Root then
+        pcall(function()
+            if not blackSaved[Window.Root] then blackSaved[Window.Root] = Window.Root.BackgroundColor3 end
+            Window.Root.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        end)
+    end
+    for _, d in ipairs(hub:GetDescendants()) do
+        paintBlackOne(d)
+    end
 end
 
 local function setPaint(mode, quiet)
@@ -2122,16 +2111,6 @@ local function setPaint(mode, quiet)
     if not hub then
         if not quiet then notify("Paint", "Hub not found", 2) end
         return
-    end
-    local gs = rootStroke()
-    if gs then
-        gs.Enabled = mode ~= "none"
-        gs.Color = outlineColor
-    end
-    if mode == "black" and Window.Root then
-        pcall(function()
-            Window.Root.BackgroundColor3 = BLACKBG
-        end)
     end
     for _, d in ipairs(hub:GetDescendants()) do
         if not paintSaved[d] then
@@ -2142,25 +2121,17 @@ local function setPaint(mode, quiet)
             }
         end
         local o = paintSaved[d]
-        if d:IsA("UIStroke") and d.Name ~= "GH_Outline" then
-            if mode == "none" then
-                d.Color = o.stroke
-            elseif mode == "outline" or mode == "full" then
+        if d:IsA("UIStroke") then
+            if mode == "outline" or mode == "full" then
                 d.Color = outlineColor
-            elseif mode == "black" then
+            else
                 d.Color = o.stroke
             end
         elseif d:IsA("GuiObject") and o.bg then
             if d.BackgroundTransparency < 1 then
                 if mode == "full" then
                     d.BackgroundColor3 = GREEN
-                elseif mode == "black" then
-                    if isSwitchElement(d) then
-                        d.BackgroundColor3 = LIME
-                    else
-                        d.BackgroundColor3 = BLACKBG
-                    end
-                elseif mode == "none" or mode == "outline" then
+                else
                     d.BackgroundColor3 = o.bg
                 end
             end
@@ -2180,11 +2151,24 @@ local function applyPaint(mode)
     setPaint(mode)
 end
 
+if Fluent.GUI then
+    track(Fluent.GUI.DescendantAdded:Connect(function(d)
+        task.defer(function()
+            if not d.Parent then return end
+            roundOne(d)
+            paintBlackOne(d)
+        end)
+    end))
+end
+
 task.spawn(function()
-    while _G.MasterActive do
-        if paintMode ~= "none" then pcall(setPaint, paintMode, true) end
-        task.wait(0.3)
+    task.wait(2)
+    if Fluent.GUI then
+        for _, d in ipairs(Fluent.GUI:GetDescendants()) do
+            roundOne(d)
+        end
     end
+    if blackActive then setBlack(true) end
 end)
 
 local ultraOn = false
@@ -2253,24 +2237,22 @@ Tabs.Settings:AddColorpicker("OutlineColor", {
     Title = "Outline Color", Default = outlineColor,
     Callback = function(v)
         outlineColor = v
-        if paintMode ~= "none" then pcall(setPaint, paintMode, true) end
+        if paintMode == "outline" or paintMode == "full" then pcall(setPaint, paintMode, true) end
     end,
 })
 
 Tabs.Settings:AddToggle("BlackTheme", {
     Title = "Black Theme", Default = true,
     Callback = function(s)
-        if switching then return end
         if s then
-            switching = true
-            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
-            if Options.GreenFull then Options.GreenFull:SetValue(false) end
-            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
-            switching = false
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
             if ultraOn then applyUltra(false) end
-            task.defer(function() applyPaint("black") end)
-        elseif paintMode == "black" then
-            applyPaint("none")
+            if paintMode == "full" or paintMode == "outline" then applyPaint("none") end
+            setBlack(true)
+        else
+            setBlack(false)
         end
     end,
 })
@@ -2278,13 +2260,10 @@ Tabs.Settings:AddToggle("BlackTheme", {
 Tabs.Settings:AddToggle("GreenOutline", {
     Title = "Green Green Hub", Default = false,
     Callback = function(s)
-        if switching then return end
         if s then
-            switching = true
-            if Options.GreenFull then Options.GreenFull:SetValue(false) end
-            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
-            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
-            switching = false
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
             if ultraOn then applyUltra(false) end
             applyPaint("outline")
         elseif paintMode == "outline" then
@@ -2295,13 +2274,10 @@ Tabs.Settings:AddToggle("GreenOutline", {
 Tabs.Settings:AddToggle("GreenFull", {
     Title = "Green Green Green Hub", Default = false,
     Callback = function(s)
-        if switching then return end
         if s then
-            switching = true
-            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
-            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
-            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
-            switching = false
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
             if ultraOn then applyUltra(false) end
             applyPaint("full")
         elseif paintMode == "full" and not ultraOn then
@@ -2312,13 +2288,10 @@ Tabs.Settings:AddToggle("GreenFull", {
 Tabs.Settings:AddToggle("GreenUltra", {
     Title = "Green Green Green Green Hub", Default = false,
     Callback = function(s)
-        if switching then return end
         if s then
-            switching = true
-            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
-            if Options.GreenFull then Options.GreenFull:SetValue(false) end
-            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
-            switching = false
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
             applyPaint("full")
             applyUltra(true)
         elseif ultraOn then
