@@ -1,0 +1,2037 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+
+if not game:IsLoaded() then repeat task.wait() until game:IsLoaded() end
+
+local SETTINGS_FILE = "mm2_hub_settings.json"
+local function safeReadSettings()
+    if not isfile or not readfile or not isfile(SETTINGS_FILE) then return {} end
+    local ok, data = pcall(function() return HttpService:JSONDecode(readfile(SETTINGS_FILE)) end)
+    if ok and type(data) == "table" then return data end
+    return {}
+end
+local function safeWriteSettings(tbl)
+    if not writefile then return end
+    pcall(function() writefile(SETTINGS_FILE, HttpService:JSONEncode(tbl)) end)
+end
+
+local saved = safeReadSettings()
+
+local HotkeyKey = Enum.KeyCode[saved.HotkeyKey or "RightShift"]
+local WaitingForKey = false
+local XrayKey = Enum.KeyCode[saved.XrayKey or "X"]
+local WaitingForXrayKey = false
+
+local ChamsESPEnabled = saved.ChamsESPEnabled ~= false
+local RoleESPEnabled = saved.RoleESPEnabled ~= false
+local GunESPEnabled = saved.GunESPEnabled ~= false
+local XrayEnabled = saved.XrayEnabled == true
+local AimbotEnabled = saved.AimbotEnabled == true
+local AimbotTarget = saved.AimbotTarget or "Murderer"
+local AimbotHoldKey = saved.AimbotHoldKey == true
+local StatsEnabled = saved.StatsEnabled == true
+local NoclipEnabled = saved.NoclipEnabled == true
+local FlyEnabled = saved.FlyEnabled == true
+local InfJumpEnabled = saved.InfJumpEnabled == true
+local FullBrightEnabled = saved.FullBrightEnabled == true
+local AntiAFKEnabled = saved.AntiAFKEnabled == true
+local WalkSpeed = saved.WalkSpeed or 16
+local JumpPower = saved.JumpPower or 50
+local FlySpeedVal = saved.FlySpeed or 60
+local RGBOutline = saved.RGBOutline == true
+local AnimsEnabled = saved.AnimsEnabled ~= false
+local CurrentOutlineColor = Color3.fromRGB(saved.OutlineR or 0, saved.OutlineG or 255, saved.OutlineB or 0)
+
+local BtnTPMurder = saved.BtnTPMurder == true
+local BtnTPSheriff = saved.BtnTPSheriff == true
+local BtnPickupGun = saved.BtnPickupGun == true
+local BtnKillAll = saved.BtnKillAll == true
+local BtnShootMurder = saved.BtnShootMurder == true
+local RoleNotifyEnabled = saved.RoleNotifyEnabled == true
+
+local GodModeEnabled = saved.GodModeEnabled == true
+local CoinGrabKey = Enum.KeyCode[saved.CoinGrabKey or "C"]
+local GodModeKey = Enum.KeyCode[saved.GodModeKey or "G"]
+local TeleportGunKey = Enum.KeyCode[saved.TeleportGunKey or "T"]
+local KeybindsEnabled = saved.KeybindsEnabled ~= false
+local AutoFarmEnabled = saved.AutoFarmEnabled == true
+local KillAuraRange = saved.KillAuraRange or 999
+
+local ToggleBtnPos = saved.ToggleBtnPos
+
+local roundActive = false
+
+local collectedCoins = setmetatable({}, {__mode = "k"})
+
+local function SaveAllSettings()
+    safeWriteSettings({
+        HotkeyKey = HotkeyKey.Name,
+        XrayKey = XrayKey.Name,
+        ChamsESPEnabled = ChamsESPEnabled,
+        RoleESPEnabled = RoleESPEnabled,
+        GunESPEnabled = GunESPEnabled,
+        XrayEnabled = XrayEnabled,
+        AimbotEnabled = AimbotEnabled,
+        AimbotTarget = AimbotTarget,
+        AimbotHoldKey = AimbotHoldKey,
+        StatsEnabled = StatsEnabled,
+        NoclipEnabled = NoclipEnabled,
+        FlyEnabled = FlyEnabled,
+        InfJumpEnabled = InfJumpEnabled,
+        FullBrightEnabled = FullBrightEnabled,
+        AntiAFKEnabled = AntiAFKEnabled,
+        WalkSpeed = WalkSpeed,
+        JumpPower = JumpPower,
+        FlySpeed = FlySpeedVal,
+        RGBOutline = RGBOutline,
+        AnimsEnabled = AnimsEnabled,
+        OutlineR = CurrentOutlineColor.R * 255,
+        OutlineG = CurrentOutlineColor.G * 255,
+        OutlineB = CurrentOutlineColor.B * 255,
+        BtnTPMurder = BtnTPMurder,
+        BtnTPSheriff = BtnTPSheriff,
+        BtnPickupGun = BtnPickupGun,
+        BtnKillAll = BtnKillAll,
+        BtnShootMurder = BtnShootMurder,
+        RoleNotifyEnabled = RoleNotifyEnabled,
+        GodModeEnabled = GodModeEnabled,
+        CoinGrabKey = CoinGrabKey.Name,
+        GodModeKey = GodModeKey.Name,
+        TeleportGunKey = TeleportGunKey.Name,
+        KeybindsEnabled = KeybindsEnabled,
+        AutoFarmEnabled = AutoFarmEnabled,
+        KillAuraRange = KillAuraRange,
+        ToggleBtnPos = ToggleBtnPos and {X = ToggleBtnPos.X, Y = ToggleBtnPos.Y} or nil,
+    })
+end
+
+local RoleCache = {}
+
+local function RemoveChamsESP()
+    for _,player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            local esp = player.Character:FindFirstChild("ChamsESP")
+            if esp then esp:Destroy() end
+        end
+    end
+end
+
+local function RemoveGunESP()
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v.Name == "GunESP" then v:Destroy() end
+    end
+end
+
+local xrayCache = setmetatable({}, {__mode = "k"})
+local xrayConn
+local function IsPlayerPart(part)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p.Character and part:IsDescendantOf(p.Character) then return true end
+    end
+    return false
+end
+local function ApplyXrayToPart(part)
+    if not part:IsA("BasePart") then return end
+    if IsPlayerPart(part) then return end
+    if xrayCache[part] == nil then xrayCache[part] = part.LocalTransparencyModifier end
+    part.LocalTransparencyModifier = 0.65
+end
+local function EnableXray()
+    for _,v in pairs(workspace:GetDescendants()) do ApplyXrayToPart(v) end
+    if xrayConn then xrayConn:Disconnect() end
+    xrayConn = workspace.DescendantAdded:Connect(function(v) ApplyXrayToPart(v) end)
+end
+local function DisableXray()
+    if xrayConn then xrayConn:Disconnect() end
+    xrayConn = nil
+    for part,old in pairs(xrayCache) do
+        if part and part.Parent then part.LocalTransparencyModifier = old end
+    end
+    xrayCache = setmetatable({}, {__mode = "k"})
+end
+
+local function ParseRoleText(t)
+    t = (t or ""):lower()
+    if t:find("murder") then return "Murderer" end
+    if t:find("sheriff") then return "Sheriff" end
+    if t:find("innocent") then return "Innocent" end
+    return nil
+end
+
+local function SetLocalRole(role)
+    if role then RoleCache[LocalPlayer] = role end
+end
+
+local function HookRoleLabel(lbl)
+    if not lbl or not lbl:IsA("TextLabel") then return end
+    local role = ParseRoleText(lbl.Text)
+    if role then SetLocalRole(role) end
+    lbl:GetPropertyChangedSignal("Text"):Connect(function()
+        local r = ParseRoleText(lbl.Text)
+        if r then SetLocalRole(r) end
+    end)
+end
+
+local function ScanRoleLabel()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return end
+    for _,d in ipairs(pg:GetDescendants()) do
+        if d.Name == "Role" and d:IsA("TextLabel") then HookRoleLabel(d) end
+    end
+end
+
+local function HookPlayerGui()
+    local pg = LocalPlayer:WaitForChild("PlayerGui", 10)
+    if not pg then return end
+    pg.DescendantAdded:Connect(function(d)
+        if d.Name == "Role" and d:IsA("TextLabel") then HookRoleLabel(d) end
+    end)
+    ScanRoleLabel()
+end
+
+HookPlayerGui()
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    ScanRoleLabel()
+end)
+
+local function GetMurdererV1()
+    for _,v in pairs(Players:GetPlayers()) do
+        if v.Character and (v.Character:FindFirstChild("Knife") or v.Backpack:FindFirstChild("Knife")) then
+            return v.Character
+        end
+    end
+end
+
+local function GetSheriffV1()
+    for _,v in pairs(Players:GetPlayers()) do
+        if v.Character and (v.Character:FindFirstChild("Gun") or v.Backpack:FindFirstChild("Gun")) then
+            return v.Character
+        end
+    end
+end
+
+local function ResolveRoleFromCache(char)
+    for plr,role in pairs(RoleCache) do
+        if plr.Character == char then return role end
+    end
+    return nil
+end
+
+local function GetRoleColor(char)
+    if RoleESPEnabled then
+        local cached = ResolveRoleFromCache(char)
+        if cached == "Murderer" then return Color3.fromRGB(255,60,60)
+        elseif cached == "Sheriff" then return Color3.fromRGB(80,150,255) end
+        local murderer = GetMurdererV1()
+        local sheriff = GetSheriffV1()
+        if char == murderer then return Color3.fromRGB(255,60,60)
+        elseif char == sheriff then return Color3.fromRGB(80,150,255) end
+    end
+    return Color3.fromRGB(0,255,0)
+end
+
+local function ApplyChams(char,color)
+    if not char then return end
+    local existing = char:FindFirstChild("ChamsESP")
+    if existing then
+        existing.FillColor = color
+        existing.OutlineColor = color
+        return
+    end
+    local h = Instance.new("Highlight")
+    h.Name = "ChamsESP"
+    h.FillTransparency = 0.75
+    h.OutlineTransparency = 0.25
+    h.FillColor = color
+    h.OutlineColor = color
+    h.Parent = char
+end
+
+local function CreateGunESP(gun)
+    if not GunESPEnabled then return end
+    if gun:FindFirstChild("GunESP") then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "GunESP"
+    highlight.FillColor = Color3.fromRGB(170,120,255)
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0.2
+    highlight.Parent = gun
+    local billboard = Instance.new("BillboardGui",gun)
+    billboard.Name = "GunESP"
+    billboard.Size = UDim2.new(0,120,0,20)
+    billboard.StudsOffset = Vector3.new(0,2,0)
+    billboard.AlwaysOnTop = true
+    local text = Instance.new("TextLabel",billboard)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.Text = "Gun Dropped"
+    text.TextColor3 = Color3.fromRGB(210,190,255)
+    text.Font = Enum.Font.GothamBold
+    text.TextScaled = true
+    text.TextStrokeTransparency = 0
+end
+
+workspace.DescendantAdded:Connect(function(obj)
+    if obj.Name == "GunDrop" and obj:IsA("BasePart") and GunESPEnabled then
+        CreateGunESP(obj)
+    end
+end)
+
+local CustomGui = Instance.new("ScreenGui")
+CustomGui.Name = "GreenHubCustom"
+CustomGui.ResetOnSpawn = false
+CustomGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Connections = {}
+local function track(conn)
+    table.insert(Connections, conn)
+    return conn
+end
+
+local notifyLast = {}
+local function notify(title, content, dur)
+    local key = tostring(title) .. "|" .. tostring(content)
+    local now = tick()
+    if notifyLast[key] and now - notifyLast[key] < 1.5 then return end
+    notifyLast[key] = now
+    Fluent:Notify({Title = title, Content = content or "", Duration = dur or 3})
+end
+task.spawn(function()
+    while true do
+        task.wait(60)
+        local now = tick()
+        for k, v in pairs(notifyLast) do
+            if now - v > 30 then notifyLast[k] = nil end
+        end
+    end
+end)
+
+local function isCoinObject(obj)
+    if not obj then return false end
+    if obj.Name == "Coin" or obj.Name == "Coin_Server" then return true end
+    if obj.Parent and (obj.Parent.Name == "Coin_Server" or obj.Parent.Name == "Coin") then return true end
+    local anc = obj:FindFirstAncestor("Coin_Server")
+    if anc then return true end
+    return false
+end
+
+local coinEntityCache = nil
+local function invalidateCoinCache()
+    coinEntityCache = nil
+end
+local function getCoinEntities()
+    if coinEntityCache then return coinEntityCache end
+    local entities = {}
+    local seen = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if isCoinObject(obj) and obj:IsA("BasePart") then
+            local ancestor = obj:FindFirstAncestor("Coin_Server")
+            local key = ancestor or obj
+            if not seen[key] then
+                seen[key] = true
+                table.insert(entities, {model = ancestor, part = obj})
+            end
+        end
+    end
+    coinEntityCache = entities
+    return entities
+end
+workspace.DescendantAdded:Connect(function(obj)
+    if obj.Name == "Coin_Server" or obj.Name == "Coin" then
+        invalidateCoinCache()
+    end
+end)
+workspace.DescendantRemoving:Connect(function(obj)
+    if obj.Name == "Coin_Server" or obj.Name == "Coin" then
+        invalidateCoinCache()
+    end
+end)
+
+local function entityKey(entity)
+    return entity.model or entity.part
+end
+
+local function entityPosition(entity)
+    if entity.model then
+        local primary = entity.model.PrimaryPart or entity.model:FindFirstChildWhichIsA("BasePart")
+        if primary then return primary.Position end
+    end
+    return entity.part.Position
+end
+
+local function markCollected(entity)
+    local key = entityKey(entity)
+    if collectedCoins[key] then return end
+    collectedCoins[key] = true
+    local target = entity.model or entity.part
+    if not target or not target.Parent then return end
+    if target:FindFirstChild("CollectedCoin") then return end
+    local h = Instance.new("Highlight")
+    h.Name = "CollectedCoin"
+    h.FillColor = Color3.fromRGB(0, 255, 100)
+    h.FillTransparency = 0.4
+    h.OutlineColor = Color3.fromRGB(0, 255, 100)
+    h.OutlineTransparency = 0
+    h.Parent = target
+end
+
+local function getNextUncollectedEntity()
+    local entities = getCoinEntities()
+    for _, entity in ipairs(entities) do
+        if not collectedCoins[entityKey(entity)] then
+            return entity
+        end
+    end
+    return nil
+end
+
+local function grabNextCoin()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local entity = getNextUncollectedEntity()
+    if not entity then return false end
+    local pos = entityPosition(entity)
+    hrp.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+    markCollected(entity)
+    return true
+end
+
+local function actionTPMurder()
+    local murderer = GetMurdererV1()
+    if not murderer then notify("TP Murder", "No murderer found", 2) return end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local target = murderer:FindFirstChild("HumanoidRootPart")
+    if hrp and target then
+        hrp.CFrame = target.CFrame + Vector3.new(0,5,0)
+        notify("TP Murder", "Teleported", 2)
+    end
+end
+
+local function actionTPSheriff()
+    local sheriff = GetSheriffV1()
+    if not sheriff then notify("TP Sheriff", "No sheriff found", 2) return end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local target = sheriff:FindFirstChild("HumanoidRootPart")
+    if hrp and target then
+        hrp.CFrame = target.CFrame + Vector3.new(0,5,0)
+        notify("TP Sheriff", "Teleported", 2)
+    end
+end
+
+local function actionPickupGun()
+    local gun = workspace:FindFirstChild("GunDrop", true)
+    if not gun then notify("Grab Gun", "No gun found", 2) return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local originalCFrame = hrp.CFrame
+    local target = gun:IsA("BasePart") and gun or gun:FindFirstChildWhichIsA("BasePart")
+    if target then
+        hrp.CFrame = target.CFrame + Vector3.new(0,2,0)
+        task.wait(0.15)
+        hrp.CFrame = originalCFrame
+        notify("Grab Gun", "Attempted pickup", 2)
+    end
+end
+
+local killAllActive = false
+local function actionKillAll()
+    if killAllActive then return end
+    killAllActive = true
+    local char = LocalPlayer.Character
+    if not char then
+        killAllActive = false
+        return
+    end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then
+        notify("Kill All", "You need a knife", 2)
+        killAllActive = false
+        return
+    end
+    local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("BasePart")
+    if not handle then
+        killAllActive = false
+        return
+    end
+
+    local visualizer = Instance.new("Part")
+    visualizer.BrickColor = BrickColor.Red()
+    visualizer.Transparency = 0.8
+    visualizer.Anchored = true
+    visualizer.CanCollide = false
+    visualizer.Shape = Enum.PartType.Ball
+    visualizer.Material = Enum.Material.ForceField
+    visualizer.CastShadow = false
+    visualizer.Size = Vector3.new(25, 25, 25)
+    visualizer.Parent = workspace
+
+    local function onHit(hit, h)
+        local c = hit.Parent
+        local humanoid = c and c:FindFirstChildOfClass("Humanoid")
+        if humanoid and c.Name ~= LocalPlayer.Name then
+            for _, part in pairs(c:GetChildren()) do
+                if part:IsA("BasePart") then
+                    pcall(firetouchinterest, part, h, 0)
+                    pcall(firetouchinterest, part, h, 1)
+                end
+            end
+        end
+    end
+
+    local reach = KillAuraRange
+    local frameCounter = 0
+
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not tool or not tool:IsDescendantOf(workspace) or not handle or not handle.Parent then
+            conn:Disconnect()
+            visualizer:Destroy()
+            killAllActive = false
+            return
+        end
+        pcall(function() visualizer.CFrame = handle.CFrame end)
+        frameCounter = frameCounter + 1
+        if frameCounter % 3 ~= 0 then return end
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer then
+                local hrp = v.Character and v.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local mag = (hrp.Position - handle.Position).Magnitude
+                    if mag <= reach then
+                        onHit(hrp, handle)
+                    end
+                end
+            end
+        end
+    end)
+
+    task.delay(2, function()
+        if conn then conn:Disconnect() end
+        visualizer:Destroy()
+        killAllActive = false
+    end)
+
+    notify("Kill All", "Killing all nearby", 2)
+end
+
+local function actionShootMurder()
+    local localRole = RoleCache[LocalPlayer]
+    if not localRole then
+        local char = LocalPlayer.Character
+        if char and (char:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")) then
+            localRole = "Sheriff"
+        end
+    end
+    if localRole ~= "Sheriff" then
+        local sheriff = GetSheriffV1()
+        if not sheriff or sheriff ~= LocalPlayer.Character then
+            notify("Shoot Murder", "You must be the sheriff", 2)
+            return
+        end
+    end
+    local murderer = GetMurdererV1()
+    if not murderer then
+        notify("Shoot Murder", "No murderer found", 2)
+        return
+    end
+    local hasGun = false
+    local char = LocalPlayer.Character
+    if char then hasGun = char:FindFirstChild("Gun") ~= nil or LocalPlayer.Backpack:FindFirstChild("Gun") ~= nil end
+    if not hasGun then
+        actionPickupGun()
+        task.wait(1)
+    end
+    local hum = murderer:FindFirstChildWhichIsA("Humanoid")
+    if hum and hum.Health > 0 then
+        hum.Health = 0
+        notify("Shoot Murder", "Shot murderer", 2)
+    else
+        notify("Shoot Murder", "Failed", 2)
+    end
+end
+
+local function actionCoinGrab()
+    local count = 0
+    while grabNextCoin() do
+        count = count + 1
+        task.wait(0.3)
+        if count > 50 then break end
+    end
+    if count > 0 then
+        notify("Coin Grabber", "Collected " .. count .. " coin(s)", 2)
+    else
+        notify("Coin Grabber", "No uncollected coins", 2)
+    end
+end
+
+local function actionTeleportGun()
+    local gun = workspace:FindFirstChild("GunDrop", true)
+    if gun and gun:IsA("BasePart") then
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            gun.CFrame = hrp.CFrame
+            notify("Teleport Gun", "Gun moved to you", 2)
+        end
+    else
+        notify("Teleport Gun", "No gun drop found", 2)
+    end
+end
+
+local function applyGodmode()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        local hum = char.Humanoid
+        hum.Name = "1"
+        local clone = hum:Clone()
+        clone.Parent = char
+        clone.Name = "Humanoid"
+        task.wait(0.1)
+        if char:FindFirstChild("1") then char["1"]:Destroy() end
+        if char:FindFirstChild("Animate") then
+            char.Animate.Disabled = true
+            task.wait(0.1)
+            char.Animate.Disabled = false
+        end
+        workspace.CurrentCamera.CameraSubject = char.Humanoid
+        notify("Godmode", "Activated", 2)
+    end
+end
+
+local Window = Fluent:CreateWindow({
+    Title = "Green Hub",
+    SubTitle = "MM2 | Murder Mystery 2",
+    TabWidth = 130,
+    Size = UDim2.fromOffset(740, 320),
+    Acrylic = false,
+    Theme = "Darker",
+    MinimizeKey = HotkeyKey,
+    Search = true,
+})
+
+local Tabs = {
+    Home      = Window:AddTab({Title = "Home",      Icon = "home"}),
+    ESP       = Window:AddTab({Title = "ESP",       Icon = "eye"}),
+    Combat    = Window:AddTab({Title = "Combat",    Icon = "sword"}),
+    Player    = Window:AddTab({Title = "Player",    Icon = "user"}),
+    Farm      = Window:AddTab({Title = "Farm",      Icon = "sprout"}),
+    Shortcuts = Window:AddTab({Title = "OnScreen",  Icon = "link"}),
+    Settings  = Window:AddTab({Title = "Settings",  Icon = "settings"}),
+}
+
+local Options = Fluent.Options
+
+local function getHub()
+    if Fluent.GUI and Fluent.GUI.Parent then return Fluent.GUI end
+    for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
+        for _, gui in ipairs(parent:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                for _, d in ipairs(gui:GetDescendants()) do
+                    if d:IsA("TextLabel") and d.Text == "Green Hub" then
+                        return gui
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function hubRoot()
+    if Window.Root and Window.Root.Parent then return Window.Root end
+    local hub = getHub()
+    if not hub then return end
+    local root
+    for _, c in ipairs(hub:GetChildren()) do
+        if c:IsA("GuiObject") and (not root or c.AbsoluteSize.X > root.AbsoluteSize.X) then
+            root = c
+        end
+    end
+    return root
+end
+
+local controlsSetup = false
+local function setupControls(root)
+    if controlsSetup or not root then return end
+    controlsSetup = true
+    local Controls = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+    track(root.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            Controls:Disable()
+        end
+    end))
+    track(UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            Controls:Enable()
+        end
+    end))
+end
+
+task.spawn(function()
+    task.wait(1)
+    pcall(function() setupControls(hubRoot()) end)
+end)
+
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "GreenHubToggle"
+ToggleGui.ResetOnSpawn = false
+ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "OpenClose"
+ToggleBtn.Size = UDim2.fromOffset(110, 36)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
+ToggleBtn.Text = "Open/Close"
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 14
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.Active = true
+ToggleBtn.Parent = ToggleGui
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = Color3.fromRGB(0, 255, 0)
+ToggleStroke.Thickness = 2
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local togglePositions = {
+    ["Center Left"]  = {Vector2.new(0, 0.5), UDim2.new(0, 20, 0.5, 0)},
+    ["Center Right"] = {Vector2.new(1, 0.5), UDim2.new(1, -20, 0.5, 0)},
+    ["Top Right"]    = {Vector2.new(1, 0),   UDim2.new(1, -20, 0, 20)},
+    ["Bottom Right"] = {Vector2.new(1, 1),   UDim2.new(1, -20, 1, -70)},
+    ["Top Left"]     = {Vector2.new(0, 0),   UDim2.new(0, 20, 0, 20)},
+    ["Bottom Left"]  = {Vector2.new(0, 1),   UDim2.new(0, 20, 1, -70)},
+}
+
+local toggleBtnName = "Center Left"
+ToggleBtn.AnchorPoint = togglePositions[toggleBtnName][1]
+ToggleBtn.Position = togglePositions[toggleBtnName][2]
+if ToggleBtnPos and ToggleBtnPos.X and ToggleBtnPos.Y then
+    ToggleBtn.Position = UDim2.new(0, ToggleBtnPos.X, 0, ToggleBtnPos.Y)
+end
+
+local movable = false
+local dragging, dragStart, startPos, moved = false, nil, nil, false
+local clickTime = 0
+ToggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging, moved = true, false
+        dragStart, startPos = input.Position, ToggleBtn.Position
+        clickTime = tick()
+    end
+end)
+track(UIS.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local d = input.Position - dragStart
+        if d.Magnitude > 10 then moved = true end
+        if movable and moved then
+            ToggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end
+end))
+track(UIS.InputEnded:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        local wasCleanClick = (not moved) and (tick() - clickTime) < 0.5
+        dragging = false
+        if wasCleanClick then
+            Window:Minimize()
+        end
+        if movable and moved then
+            ToggleBtnPos = {X = ToggleBtn.Position.X.Offset, Y = ToggleBtn.Position.Y.Offset}
+            SaveAllSettings()
+        end
+    end
+end))
+
+local paintSaved = setmetatable({}, {__mode = "k"})
+local paintMode = "none"
+local outlineColor = Color3.fromRGB(0, 255, 0)
+local GREEN = Color3.fromRGB(0, 255, 0)
+local LIME = Color3.fromRGB(0, 255, 0)
+local blackActive = false
+local blackSaved = setmetatable({}, {__mode = "k"})
+
+local function isToggleTrack(d)
+    if not d:IsA("Frame") then return false end
+    if not d.ClipsDescendants then return false end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c or c.CornerRadius.Scale < 0.5 then return false end
+    local sy = d.AbsoluteSize.Y
+    return sy >= 16 and sy <= 36
+end
+
+local function paintBlackOne(d)
+    if not blackActive then return end
+    if not d:IsA("GuiObject") then return end
+    if d.BackgroundTransparency >= 1 then return end
+    if not blackSaved[d] then blackSaved[d] = d.BackgroundColor3 end
+    if isToggleTrack(d) then
+        d.BackgroundColor3 = LIME
+    else
+        d.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    end
+end
+
+local function setBlack(on)
+    blackActive = on
+    if not on then
+        for d, c in pairs(blackSaved) do
+            pcall(function() if d and d.Parent then d.BackgroundColor3 = c end end)
+        end
+        table.clear(blackSaved)
+        return
+    end
+    local hub = getHub()
+    if not hub then return end
+    if Window.Root then
+        pcall(function()
+            if not blackSaved[Window.Root] then blackSaved[Window.Root] = Window.Root.BackgroundColor3 end
+            Window.Root.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        end)
+    end
+    for _, d in ipairs(hub:GetDescendants()) do
+        paintBlackOne(d)
+    end
+end
+
+local function setPaint(mode, quiet)
+    local hub = getHub()
+    if not hub then return end
+    for _, d in ipairs(hub:GetDescendants()) do
+        if not paintSaved[d] then
+            paintSaved[d] = {
+                stroke = d:IsA("UIStroke") and d.Color or nil,
+                bg = d:IsA("GuiObject") and d.BackgroundColor3 or nil,
+                text = (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and d.TextColor3 or nil,
+            }
+        end
+        local o = paintSaved[d]
+        if d:IsA("UIStroke") then
+            if mode == "outline" or mode == "full" then
+                d.Color = outlineColor
+            else
+                d.Color = o.stroke
+            end
+        elseif d:IsA("GuiObject") and o.bg then
+            if d.BackgroundTransparency < 1 then
+                if mode == "full" then
+                    d.BackgroundColor3 = GREEN
+                else
+                    d.BackgroundColor3 = o.bg
+                end
+            end
+        end
+        if o.text then
+            if mode == "full" then
+                d.TextColor3 = Color3.new(0, 0, 0)
+            else
+                d.TextColor3 = o.text
+            end
+        end
+    end
+end
+
+local function applyPaint(mode)
+    paintMode = mode
+    setPaint(mode)
+end
+
+local function roundOne(d)
+    if not d:IsA("GuiObject") then return end
+    if d:FindFirstChildOfClass("UICorner") then return end
+    local sz = d.AbsoluteSize
+    if sz.X < 50 or sz.Y < 30 then return end
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 10)
+    c.Parent = d
+end
+
+local function roundGui()
+    local hub = getHub()
+    if not hub then return end
+    for _, d in ipairs(hub:GetDescendants()) do
+        pcall(roundOne, d)
+    end
+end
+
+if Fluent.GUI then
+    track(Fluent.GUI.DescendantAdded:Connect(function(d)
+        task.defer(function()
+            if not d or not d.Parent then return end
+            paintBlackOne(d)
+            task.wait(0.1)
+            if not d or not d.Parent then return end
+            pcall(roundOne, d)
+        end)
+    end))
+end
+
+task.spawn(function()
+    task.wait(2)
+    pcall(roundGui)
+end)
+
+local function ApplyStyle(obj, color)
+    local c = Instance.new("UICorner", obj); c.CornerRadius = UDim.new(0, 9)
+    local s = Instance.new("UIStroke", obj)
+    s.Name = "MainStroke"; s.Color = color or CurrentOutlineColor
+    s.Thickness = 2; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+end
+
+local moveableBtns = {}
+local function createMoveableBtn(name, color, action)
+    local btn = Instance.new("TextButton", CustomGui)
+    btn.Size = UDim2.new(0,110,0,40)
+    btn.Position = UDim2.new(0, 100 + #moveableBtns * 120, 0, 200)
+    btn.BackgroundColor3 = Color3.fromRGB(15,15,15)
+    btn.Text = name
+    btn.TextColor3 = color
+    btn.Font = "GothamBold"
+    btn.TextSize = 14
+    ApplyStyle(btn, color)
+    local drag, dragStart, startPos, moved = false
+    local btnConns = {}
+    table.insert(btnConns, btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            drag = true
+            dragStart = input.Position
+            startPos = btn.Position
+            moved = false
+        end
+    end))
+    table.insert(btnConns, UIS.InputChanged:Connect(function(input)
+        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then moved = true end
+            btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end))
+    table.insert(btnConns, btn.InputEnded:Connect(function(input)
+        if drag and not moved then action() end
+        drag = false
+    end))
+    btn.Destroying:Connect(function()
+        for _, c in ipairs(btnConns) do
+            pcall(function() c:Disconnect() end)
+        end
+        btnConns = {}
+    end)
+    return btn
+end
+
+local function toggleMoveableBtn(state, name, action, color)
+    if state then
+        if moveableBtns[name] then return end
+        moveableBtns[name] = createMoveableBtn(name, color, action)
+    else
+        if moveableBtns[name] then
+            moveableBtns[name]:Destroy()
+            moveableBtns[name] = nil
+        end
+    end
+end
+
+local isAlive
+local flyConn, bodyVel, bodyGyr
+local function StartFly()
+    if flyConn then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return end
+    hum.PlatformStand = true
+    bodyVel = Instance.new("BodyVelocity", hrp)
+    bodyVel.Velocity = Vector3.zero
+    bodyVel.MaxForce = Vector3.new(1e5,1e5,1e5)
+    bodyGyr = Instance.new("BodyGyro", hrp)
+    bodyGyr.MaxTorque = Vector3.new(1e5,1e5,1e5)
+    bodyGyr.D = 50
+    flyConn = RunService.Heartbeat:Connect(function()
+        if not FlyEnabled then return end
+        if not bodyVel or not bodyVel.Parent or not bodyGyr or not bodyGyr.Parent then
+            StopFly()
+            return
+        end
+        local cam = workspace.CurrentCamera
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        if not hum then return end
+
+        local md = hum.MoveDirection
+        if md.Magnitude < 0.1 then
+            local ok, controls = pcall(function()
+                return require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+            end)
+            if ok and controls then
+                local ok2, mv = pcall(function() return controls:GetMoveVector() end)
+                if ok2 and mv and mv.Magnitude > 0.1 then
+                    md = mv
+                end
+            end
+        end
+
+        local velocity = Vector3.zero
+        if md.Magnitude > 0.1 then
+            velocity = md.Unit * FlySpeedVal
+            local lookY = cam.CFrame.LookVector.Y
+            if math.abs(lookY) > 0.1 then
+                velocity = velocity + Vector3.new(0, lookY * FlySpeedVal, 0)
+            end
+            if velocity.Magnitude > FlySpeedVal then
+                velocity = velocity.Unit * FlySpeedVal
+            end
+        end
+
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then
+            velocity = velocity + Vector3.new(0, FlySpeedVal, 0)
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+            velocity = velocity - Vector3.new(0, FlySpeedVal, 0)
+        end
+
+        bodyVel.Velocity = velocity
+        bodyGyr.CFrame = cam.CFrame
+    end)
+end
+local function StopFly()
+    FlyEnabled = false
+    if bodyVel then bodyVel:Destroy(); bodyVel = nil end
+    if bodyGyr then bodyGyr:Destroy(); bodyGyr = nil end
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+isAlive = function()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hum = char:FindFirstChild("Humanoid")
+    return hum and hum.Health > 0
+end
+
+local originalLighting = nil
+local function SaveLighting()
+    if originalLighting then return end
+    originalLighting = {
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd,
+        GlobalShadows = Lighting.GlobalShadows,
+        Ambient = Lighting.Ambient,
+    }
+end
+local function RestoreLighting()
+    if not originalLighting then return end
+    Lighting.Brightness = originalLighting.Brightness
+    Lighting.ClockTime = originalLighting.ClockTime
+    Lighting.FogEnd = originalLighting.FogEnd
+    Lighting.GlobalShadows = originalLighting.GlobalShadows
+    Lighting.Ambient = originalLighting.Ambient
+    originalLighting = nil
+end
+local function ApplyFullBright()
+    SaveLighting()
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.fromRGB(255,255,255)
+end
+
+local statsGui
+local statsMinimized = false
+
+local function createStatsGui()
+    statsGui = Instance.new("ScreenGui")
+    statsGui.Name = "StatsGUI"
+    statsGui.ResetOnSpawn = false
+    statsGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    local mainFrame = Instance.new("Frame", statsGui)
+    mainFrame.Size = UDim2.new(0,300,0,200)
+    mainFrame.Position = UDim2.new(0,10,0,50)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    mainFrame.BackgroundTransparency = 0.5
+    mainFrame.Active = false
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0,8)
+
+    local dragBar = Instance.new("Frame", mainFrame)
+    dragBar.Size = UDim2.new(1,0,0,22)
+    dragBar.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    dragBar.BackgroundTransparency = 0.3
+    dragBar.Active = true
+    Instance.new("UICorner", dragBar).CornerRadius = UDim.new(0,8)
+
+    local closeBtn = Instance.new("TextButton", dragBar)
+    closeBtn.Size = UDim2.new(0,20,0,20)
+    closeBtn.Position = UDim2.new(0,0,0.5,-10)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200,0,0)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0,4)
+    closeBtn.MouseButton1Click:Connect(function()
+        statsGui:Destroy()
+        statsGui = nil
+        StatsEnabled = false
+        if Options.StatsToggle then pcall(function() Options.StatsToggle:SetValue(false) end) end
+        SaveAllSettings()
+    end)
+
+    local minimizeBtn = Instance.new("TextButton", dragBar)
+    minimizeBtn.Size = UDim2.new(0,20,0,20)
+    minimizeBtn.Position = UDim2.new(0,22,0.5,-10)
+    minimizeBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    minimizeBtn.Text = "-"
+    minimizeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    minimizeBtn.Font = Enum.Font.GothamBold
+    minimizeBtn.TextSize = 18
+    Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0,4)
+
+    local titleLabel = Instance.new("TextLabel", dragBar)
+    titleLabel.Size = UDim2.new(1,-50,1,0)
+    titleLabel.Position = UDim2.new(0,46,0,0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Stats"
+    titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 14
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    local scrollFrame = Instance.new("ScrollingFrame", mainFrame)
+    scrollFrame.Position = UDim2.new(0,0,0,22)
+    scrollFrame.Size = UDim2.new(1,0,1,-22)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.AutomaticCanvasSize = "Y"
+    scrollFrame.Name = "StatsScroll"
+    scrollFrame.Active = false
+    local listLayout = Instance.new("UIListLayout", scrollFrame)
+    listLayout.FillDirection = Enum.FillDirection.Vertical
+    listLayout.SortOrder = Enum.SortOrder.Name
+    listLayout.Padding = UDim.new(0,2)
+    local padding = Instance.new("UIPadding", scrollFrame)
+    padding.PaddingLeft = UDim.new(0,6)
+
+    minimizeBtn.MouseButton1Click:Connect(function()
+        statsMinimized = not statsMinimized
+        scrollFrame.Visible = not statsMinimized
+        mainFrame.Size = statsMinimized and UDim2.new(0,300,0,22) or UDim2.new(0,300,0,200)
+        minimizeBtn.Text = statsMinimized and "+" or "-"
+    end)
+
+    local drag, start, pos, camType
+    dragBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            drag = true
+            start = input.Position
+            pos = mainFrame.Position
+            camType = workspace.CurrentCamera.CameraType
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+            task.spawn(function()
+                while drag and task.wait(0.1) do
+                    if not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                        drag = false
+                        workspace.CurrentCamera.CameraType = camType
+                        break
+                    end
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if drag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - start
+            mainFrame.Position = UDim2.new(pos.X.Scale, pos.X.Offset + delta.X, pos.Y.Scale, pos.Y.Offset + delta.Y)
+        end
+    end)
+    dragBar.InputEnded:Connect(function(input)
+        if drag then
+            drag = false
+            workspace.CurrentCamera.CameraType = camType
+        end
+    end)
+end
+
+local statsLoopActive = false
+local function updateStatsLoop()
+    if statsLoopActive then return end
+    statsLoopActive = true
+    while StatsEnabled do
+        if statsGui and statsGui.Parent then
+            local mainFrame = statsGui:FindFirstChildOfClass("Frame")
+            if mainFrame then
+                local scrollFrame = mainFrame:FindFirstChild("StatsScroll")
+                if scrollFrame and scrollFrame.Visible then
+                    for _, child in ipairs(scrollFrame:GetChildren()) do
+                        if child:IsA("TextLabel") then child:Destroy() end
+                    end
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        local char = plr.Character
+                        local isPlayerAlive = char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0
+                        local role
+                        if not isPlayerAlive then
+                            role = "Spectate"
+                        else
+                            role = ResolveRoleFromCache(char)
+                            if not role then
+                                if char and (char:FindFirstChild("Knife") or plr.Backpack:FindFirstChild("Knife")) then role = "Murderer"
+                                elseif char and (char:FindFirstChild("Gun") or plr.Backpack:FindFirstChild("Gun")) then role = "Sheriff"
+                                else role = "Innocent" end
+                            end
+                        end
+                        local health = isPlayerAlive and char.Humanoid.Health or 0
+                        local coords = char and char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position or Vector3.zero
+
+                        local color
+                        if not roundActive then
+                            color = Color3.fromRGB(169,169,169)
+                        elseif not isPlayerAlive then
+                            color = Color3.fromRGB(169,169,169)
+                        elseif role == "Murderer" then
+                            color = Color3.fromRGB(255,60,60)
+                        elseif role == "Sheriff" then
+                            color = Color3.fromRGB(80,150,255)
+                        else
+                            color = Color3.fromRGB(0,255,0)
+                        end
+
+                        local lbl = Instance.new("TextLabel", scrollFrame)
+                        lbl.Size = UDim2.new(1,0,0,16)
+                        lbl.BackgroundTransparency = 1
+                        lbl.Text = string.format("%s (%s) HP: %.0f Pos: %.1f,%.1f,%.1f", plr.Name, role, health, coords.X, coords.Y, coords.Z)
+                        lbl.TextColor3 = color
+                        lbl.Font = Enum.Font.Gotham
+                        lbl.TextSize = 12
+                        lbl.TextXAlignment = Enum.TextXAlignment.Left
+                    end
+                    scrollFrame.CanvasSize = UDim2.new(0,0,0,#Players:GetPlayers() * 18)
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+    statsLoopActive = false
+end
+
+local function aimbotFunction()
+    if not AimbotEnabled then return end
+    if AimbotHoldKey and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local myHead = char:FindFirstChild("Head")
+    if not myHead then return end
+
+    local targets = {}
+    if AimbotTarget == "Murderer" then
+        local m = GetMurdererV1()
+        if m and m:FindFirstChild("Head") then table.insert(targets, m.Head) end
+    elseif AimbotTarget == "Sheriff" then
+        local s = GetSheriffV1()
+        if s and s:FindFirstChild("Head") then table.insert(targets, s.Head) end
+    else
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local h = plr.Character:FindFirstChild("Head")
+                if h then table.insert(targets, h) end
+            end
+        end
+    end
+
+    local nearest, nearestDist = nil, math.huge
+    for _, head in ipairs(targets) do
+        local dist = (myHead.Position - head.Position).Magnitude
+        if dist < nearestDist then
+            nearestDist = dist
+            nearest = head
+        end
+    end
+
+    if nearest then
+        local cam = workspace.CurrentCamera
+        local targetCFrame = CFrame.new(cam.CFrame.Position, nearest.Position)
+        cam.CFrame = cam.CFrame:Lerp(targetCFrame, 0.25)
+    end
+end
+
+local function collectCoins()
+    for i = 1, 20 do
+        if not AutoFarmEnabled then return end
+        if not isAlive() then return end
+        if not grabNextCoin() then return end
+        task.wait(0.4)
+    end
+end
+
+local autoFarmActive = false
+local function autoFarmLoop()
+    if autoFarmActive then return end
+    autoFarmActive = true
+    while AutoFarmEnabled do
+        task.wait(0.5)
+        if not AutoFarmEnabled then break end
+        if not isAlive() then continue end
+        local char = LocalPlayer.Character
+        if not char then continue end
+        local localRole = RoleCache[LocalPlayer]
+        if not localRole then
+            if char:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife") then localRole = "Murderer"
+            elseif char:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun") then localRole = "Sheriff"
+            else localRole = "Innocent" end
+        end
+        if localRole == "Murderer" then
+            if not killAllActive then actionKillAll() end
+        elseif localRole == "Sheriff" then
+            local murderer = GetMurdererV1()
+            if murderer then
+                local hum = murderer:FindFirstChildWhichIsA("Humanoid")
+                if hum and hum.Health > 0 then
+                    hum.Health = 0
+                    notify("Auto Farm", "Killed murderer", 2)
+                end
+            end
+        else
+            if not killAllActive then collectCoins() end
+            local gun = workspace:FindFirstChild("GunDrop", true)
+            if gun and isAlive() then
+                task.wait(1)
+                if not isAlive() or not AutoFarmEnabled then continue end
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local target = gun:IsA("BasePart") and gun or gun:FindFirstChildWhichIsA("BasePart")
+                    if target then
+                        hrp.CFrame = target.CFrame + Vector3.new(0,2,0)
+                        task.wait(0.5)
+                        if not isAlive() or not AutoFarmEnabled then continue end
+                        local murderer = GetMurdererV1()
+                        if murderer then
+                            local hum = murderer:FindFirstChildWhichIsA("Humanoid")
+                            if hum and hum.Health > 0 then
+                                hum.Health = 0
+                                notify("Auto Farm", "Shot murderer", 2)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    autoFarmActive = false
+end
+
+local roleNotifyActive = false
+local function roleNotifyLoop()
+    if roleNotifyActive then return end
+    roleNotifyActive = true
+    while RoleNotifyEnabled do
+        task.wait(5)
+        if not RoleNotifyEnabled then break end
+        local murdererChar = GetMurdererV1()
+        local sheriffChar = GetSheriffV1()
+        local murdererName = murdererChar and (Players:GetPlayerFromCharacter(murdererChar) and Players:GetPlayerFromCharacter(murdererChar).Name or "Unknown") or "Unknown"
+        local sheriffName = sheriffChar and (Players:GetPlayerFromCharacter(sheriffChar) and Players:GetPlayerFromCharacter(sheriffChar).Name or "Unknown") or "Unknown"
+        notify("Murderer", murdererName, 3)
+        notify("Sheriff", sheriffName, 3)
+    end
+    roleNotifyActive = false
+end
+
+Tabs.Home:AddParagraph({
+    Title = "Green Hub | MM2",
+    Content = "Settings save automatically.\nRightShift to toggle the hub.",
+})
+
+local playerCountLabel = Tabs.Home:AddParagraph({
+    Title = "Players Online",
+    Content = tostring(#Players:GetPlayers()),
+})
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        pcall(function()
+            playerCountLabel:SetDesc(tostring(#Players:GetPlayers()) .. " players in server")
+        end)
+    end
+end)
+
+Tabs.Home:AddButton({
+    Title = "Rejoin Server",
+    Callback = function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end,
+})
+
+Tabs.Home:AddButton({
+    Title = "Copy Server Link",
+    Callback = function()
+        pcall(function()
+            setclipboard("roblox://experiences/start?placeId=" .. game.PlaceId .. "&gameInstanceId=" .. game.JobId)
+        end)
+        notify("Copy Server Link", "Copied", 2)
+    end,
+})
+
+Tabs.Home:AddButton({
+    Title = "Infinite Yield",
+    Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+    end,
+})
+
+Tabs.Home:AddButton({
+    Title = "Nameless Admin",
+    Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/FilteringEnabled/NamelessAdmin/main/Source'))()
+    end,
+})
+
+Tabs.Home:AddButton({
+    Title = "Destroy Hub",
+    Callback = function()
+        pcall(function() Fluent:Destroy() end)
+        pcall(function()
+            local hub = getHub()
+            if hub then hub:Destroy() end
+        end)
+        CustomGui:Destroy()
+        ToggleGui:Destroy()
+        if statsGui then statsGui:Destroy() end
+    end,
+})
+
+Tabs.ESP:AddToggle("ChamsESP", {
+    Title = "Chams ESP",
+    Default = ChamsESPEnabled,
+    Callback = function(v)
+        ChamsESPEnabled = v
+        if not v then RemoveChamsESP() end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.ESP:AddToggle("RoleESP", {
+    Title = "Role Detection",
+    Default = RoleESPEnabled,
+    Callback = function(v)
+        RoleESPEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.ESP:AddToggle("GunESP", {
+    Title = "Gun ESP",
+    Default = GunESPEnabled,
+    Callback = function(v)
+        GunESPEnabled = v
+        if not v then RemoveGunESP() end
+        SaveAllSettings()
+    end,
+})
+
+local xrayToggle = Tabs.ESP:AddToggle("Xray", {
+    Title = "Xray",
+    Default = XrayEnabled,
+    Callback = function(v)
+        XrayEnabled = v
+        if v then EnableXray() else DisableXray() end
+        SaveAllSettings()
+    end,
+})
+
+local xrayKeyButton = Tabs.ESP:AddButton({
+    Title = "Xray Hotkey: " .. XrayKey.Name,
+    Callback = function()
+        WaitingForXrayKey = true
+        notify("Xray Hotkey", "Press any key", 3)
+    end,
+})
+
+Tabs.ESP:AddToggle("RoleNotify", {
+    Title = "Role Notify",
+    Default = RoleNotifyEnabled,
+    Callback = function(v)
+        RoleNotifyEnabled = v
+        if v then task.spawn(roleNotifyLoop) end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.ESP:AddButton({
+    Title = "Announce Roles",
+    Callback = function()
+        local murdererChar = GetMurdererV1()
+        local sheriffChar = GetSheriffV1()
+        local murdererName = murdererChar and (Players:GetPlayerFromCharacter(murdererChar) and Players:GetPlayerFromCharacter(murdererChar).Name or "Unknown") or "Unknown"
+        local sheriffName = sheriffChar and (Players:GetPlayerFromCharacter(sheriffChar) and Players:GetPlayerFromCharacter(sheriffChar).Name or "Unknown") or "Unknown"
+        local msg1 = "The murderer is " .. murdererName .. "!"
+        local msg2 = "The sheriff is " .. sheriffName .. "!"
+        pcall(function()
+            local chat = game:GetService("TextChatService")
+            if chat then
+                chat.TextChannels.RBXGeneral:SendAsync(msg1)
+                task.wait(0.5)
+                chat.TextChannels.RBXGeneral:SendAsync(msg2)
+            else
+                local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+                if chatRemote then
+                    local sayMessage = chatRemote:FindFirstChild("SayMessageRequest")
+                    if sayMessage then
+                        sayMessage:FireServer(msg1, "All")
+                        task.wait(0.5)
+                        sayMessage:FireServer(msg2, "All")
+                    end
+                end
+            end
+        end)
+        notify("Announce Roles", "Sent to chat", 2)
+    end,
+})
+
+Tabs.Combat:AddButton({
+    Title = "Grab Gun",
+    Callback = actionPickupGun,
+})
+
+Tabs.Combat:AddButton({
+    Title = "TP Murder",
+    Callback = actionTPMurder,
+})
+
+Tabs.Combat:AddButton({
+    Title = "TP Sheriff",
+    Callback = actionTPSheriff,
+})
+
+Tabs.Combat:AddButton({
+    Title = "Shoot Murder",
+    Callback = actionShootMurder,
+})
+
+Tabs.Combat:AddButton({
+    Title = "Kill All",
+    Callback = actionKillAll,
+})
+
+Tabs.Combat:AddButton({
+    Title = "Teleport Gun to Me",
+    Callback = actionTeleportGun,
+})
+
+Tabs.Combat:AddSlider("KillAuraRange", {
+    Title = "Kill Aura Range",
+    Default = KillAuraRange,
+    Min = 5,
+    Max = 999,
+    Rounding = 0,
+    Callback = function(v) KillAuraRange = v; SaveAllSettings() end,
+})
+
+Tabs.Player:AddToggle("Aimbot", {
+    Title = "Aimbot",
+    Default = AimbotEnabled,
+    Callback = function(v)
+        AimbotEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddDropdown("AimbotTargetDrop", {
+    Title = "Aimbot Target",
+    Values = {"Murderer", "Sheriff", "All"},
+    Default = AimbotTarget,
+    Multi = false,
+    Callback = function(v)
+        AimbotTarget = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("AimbotHold", {
+    Title = "Hold to Aim (RMB)",
+    Default = AimbotHoldKey,
+    Callback = function(v)
+        AimbotHoldKey = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("Godmode", {
+    Title = "Godmode",
+    Default = GodModeEnabled,
+    Callback = function(v)
+        GodModeEnabled = v
+        if v then applyGodmode() end
+        SaveAllSettings()
+    end,
+})
+
+Options.StatsToggle = Tabs.Player:AddToggle("Stats", {
+    Title = "Statistics",
+    Default = StatsEnabled,
+    Callback = function(v)
+        StatsEnabled = v
+        if v then
+            if not statsGui then createStatsGui() end
+            task.spawn(updateStatsLoop)
+        else
+            if statsGui then statsGui:Destroy(); statsGui = nil end
+        end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("Fly", {
+    Title = "Fly",
+    Default = FlyEnabled,
+    Callback = function(v)
+        FlyEnabled = v
+        if v then StartFly() else StopFly() end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("Noclip", {
+    Title = "Noclip",
+    Default = NoclipEnabled,
+    Callback = function(v)
+        NoclipEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("InfJump", {
+    Title = "Infinite Jump",
+    Default = InfJumpEnabled,
+    Callback = function(v)
+        InfJumpEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("FullBright", {
+    Title = "Fullbright",
+    Default = FullBrightEnabled,
+    Callback = function(v)
+        FullBrightEnabled = v
+        if v then ApplyFullBright() else RestoreLighting() end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddToggle("AntiAFK", {
+    Title = "Anti AFK",
+    Default = AntiAFKEnabled,
+    Callback = function(v)
+        AntiAFKEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Player:AddSlider("WalkSpeed", {
+    Title = "WalkSpeed",
+    Default = WalkSpeed,
+    Min = 16,
+    Max = 200,
+    Rounding = 0,
+    Callback = function(v) WalkSpeed = v; SaveAllSettings() end,
+})
+
+Tabs.Player:AddSlider("JumpPower", {
+    Title = "JumpPower",
+    Default = JumpPower,
+    Min = 50,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(v) JumpPower = v; SaveAllSettings() end,
+})
+
+Tabs.Player:AddSlider("FlySpeed", {
+    Title = "Fly Speed",
+    Default = FlySpeedVal,
+    Min = 10,
+    Max = 300,
+    Rounding = 0,
+    Callback = function(v) FlySpeedVal = v; SaveAllSettings() end,
+})
+
+Tabs.Farm:AddToggle("AutoFarm", {
+    Title = "Auto Farm",
+    Default = AutoFarmEnabled,
+    Callback = function(v)
+        AutoFarmEnabled = v
+        if v then task.spawn(autoFarmLoop) end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Farm:AddButton({
+    Title = "Coin Grabber",
+    Callback = actionCoinGrab,
+})
+
+Tabs.Shortcuts:AddToggle("BtnTPMurderT", {
+    Title = "TP Murder Button",
+    Default = BtnTPMurder,
+    Callback = function(v)
+        BtnTPMurder = v
+        toggleMoveableBtn(v, "TP Murder", actionTPMurder, Color3.fromRGB(255,60,60))
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Shortcuts:AddToggle("BtnTPSheriffT", {
+    Title = "TP Sheriff Button",
+    Default = BtnTPSheriff,
+    Callback = function(v)
+        BtnTPSheriff = v
+        toggleMoveableBtn(v, "TP Sheriff", actionTPSheriff, Color3.fromRGB(80,150,255))
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Shortcuts:AddToggle("BtnPickupGunT", {
+    Title = "Pickup Gun Button",
+    Default = BtnPickupGun,
+    Callback = function(v)
+        BtnPickupGun = v
+        toggleMoveableBtn(v, "Pickup Gun", actionPickupGun, Color3.fromRGB(170,120,255))
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Shortcuts:AddToggle("BtnKillAllT", {
+    Title = "Kill All Button",
+    Default = BtnKillAll,
+    Callback = function(v)
+        BtnKillAll = v
+        toggleMoveableBtn(v, "Kill All", actionKillAll, Color3.fromRGB(255,60,60))
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Shortcuts:AddToggle("BtnShootMurderT", {
+    Title = "Shoot Murder Button",
+    Default = BtnShootMurder,
+    Callback = function(v)
+        BtnShootMurder = v
+        toggleMoveableBtn(v, "Shoot Murder", actionShootMurder, Color3.fromRGB(0,255,100))
+        SaveAllSettings()
+    end,
+})
+
+local hotkeyButton = Tabs.Settings:AddButton({
+    Title = "GUI Hotkey: " .. HotkeyKey.Name,
+    Callback = function()
+        WaitingForKey = true
+        notify("GUI Hotkey", "Press any key", 3)
+    end,
+})
+
+Tabs.Settings:AddToggle("KeybindsToggle", {
+    Title = "Keybinds Enabled",
+    Default = KeybindsEnabled,
+    Callback = function(v)
+        KeybindsEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Settings:AddToggle("RGBOutline", {
+    Title = "RGB Outline",
+    Default = RGBOutline,
+    Callback = function(v)
+        RGBOutline = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Settings:AddToggle("Anims", {
+    Title = "Animations",
+    Default = AnimsEnabled,
+    Callback = function(v)
+        AnimsEnabled = v
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Settings:AddToggle("Transparent", {
+    Title = "Transparent Background",
+    Default = false,
+    Callback = function(s)
+        pcall(function()
+            local r = hubRoot()
+            if r then r.BackgroundTransparency = s and 0.5 or 0 end
+        end)
+    end,
+})
+
+Tabs.Settings:AddToggle("MovableBtn", {
+    Title = "Movable Open/Close Button",
+    Default = false,
+    Callback = function(s) movable = s end,
+})
+
+Tabs.Settings:AddDropdown("TogglePos", {
+    Title = "Open/Close Position",
+    Multi = false,
+    Default = "Center Left",
+    Values = {"Center Left","Center Right","Top Right","Bottom Right","Top Left","Bottom Left"},
+    Callback = function(v)
+        local p = togglePositions[v]
+        if p then
+            ToggleBtn.AnchorPoint = p[1]
+            ToggleBtn.Position = p[2]
+            ToggleBtnPos = nil
+            SaveAllSettings()
+        end
+    end,
+})
+
+Tabs.Settings:AddColorpicker("OutlineColor", {
+    Title = "Outline Color",
+    Default = CurrentOutlineColor,
+    Callback = function(v)
+        CurrentOutlineColor = v
+        outlineColor = v
+        for _, btn in pairs(moveableBtns) do
+            local s = btn:FindFirstChild("MainStroke")
+            if s then s.Color = v end
+        end
+        if paintMode == "outline" or paintMode == "full" then pcall(setPaint, paintMode, true) end
+        SaveAllSettings()
+    end,
+})
+
+Tabs.Settings:AddToggle("BlackTheme", {
+    Title = "Black Theme",
+    Default = true,
+    Callback = function(s)
+        if s then
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if paintMode == "full" or paintMode == "outline" then applyPaint("none") end
+            setBlack(true)
+        else
+            setBlack(false)
+        end
+    end,
+})
+
+Tabs.Settings:AddToggle("GreenOutline", {
+    Title = "Green Outline Hub",
+    Default = false,
+    Callback = function(s)
+        if s then
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+            applyPaint("outline")
+        elseif paintMode == "outline" then
+            applyPaint("none")
+        end
+    end,
+})
+
+Tabs.Settings:AddToggle("GreenFull", {
+    Title = "Green Full Hub",
+    Default = false,
+    Callback = function(s)
+        if s then
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+            applyPaint("full")
+        elseif paintMode == "full" then
+            applyPaint("none")
+        end
+    end,
+})
+
+Tabs.Settings:AddParagraph({
+    Title = "Keybinds",
+    Content = "RShift = Hub\nX = Xray\nF = Fly\nN = Noclip\nJ = Inf Jump\nC = Coin\nG = God\nT = Teleport Gun",
+})
+
+RunService.Stepped:Connect(function()
+    if NoclipEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end
+    end
+end)
+
+UIS.JumpRequest:Connect(function()
+    if InfJumpEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end
+end)
+
+local VU = game:GetService("VirtualUser")
+LocalPlayer.Idled:Connect(function()
+    if AntiAFKEnabled then
+        VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum.WalkSpeed = WalkSpeed
+            hum.JumpPower = JumpPower
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if AimbotEnabled then aimbotFunction() end
+end)
+
+task.spawn(function()
+    while task.wait(0.03) do
+        if RGBOutline then
+            local hue = tick() % 3 / 3
+            local col = Color3.fromHSV(hue, 0.8, 1)
+            for _, btn in pairs(moveableBtns) do
+                local s = btn:FindFirstChild("MainStroke")
+                if s then s.Color = col end
+            end
+            ToggleStroke.Color = col
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.4) do
+        if not ChamsESPEnabled then continue end
+        for _,player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                ApplyChams(player.Character, GetRoleColor(player.Character))
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local murdererChar = GetMurdererV1()
+        local sheriffChar = GetSheriffV1()
+        local hasMurderer = murdererChar ~= nil
+        local hasSheriff = sheriffChar ~= nil
+
+        if not roundActive and hasMurderer and hasSheriff then
+            roundActive = true
+            local murdererPlr = murdererChar and Players:GetPlayerFromCharacter(murdererChar)
+            local sheriffPlr = sheriffChar and Players:GetPlayerFromCharacter(sheriffChar)
+            notify("Round Started", "Murderer: " .. (murdererPlr and murdererPlr.Name or "Unknown"), 3)
+            notify("Round Started", "Sheriff: " .. (sheriffPlr and sheriffPlr.Name or "Unknown"), 3)
+        elseif roundActive and (not hasMurderer or not hasSheriff) then
+            roundActive = false
+            table.clear(collectedCoins)
+            invalidateCoinCache()
+            notify("Round Ended", "", 2)
+        end
+    end
+end)
+
+UIS.InputBegan:Connect(function(i, gp)
+    if gp or not KeybindsEnabled then return end
+    if WaitingForKey then
+        if i.UserInputType == Enum.UserInputType.Keyboard then
+            HotkeyKey = i.KeyCode
+            pcall(function() hotkeyButton:SetTitle("GUI Hotkey: " .. HotkeyKey.Name) end)
+            WaitingForKey = false
+            SaveAllSettings()
+        end
+        return
+    end
+    if WaitingForXrayKey then
+        if i.UserInputType == Enum.UserInputType.Keyboard then
+            XrayKey = i.KeyCode
+            pcall(function() xrayKeyButton:SetTitle("Xray Hotkey: " .. XrayKey.Name) end)
+            WaitingForXrayKey = false
+            SaveAllSettings()
+        end
+        return
+    end
+    if i.KeyCode == XrayKey then
+        XrayEnabled = not XrayEnabled
+        if xrayToggle then xrayToggle:SetValue(XrayEnabled) end
+        if XrayEnabled then EnableXray() else DisableXray() end
+        SaveAllSettings()
+    elseif i.KeyCode == Enum.KeyCode.F then
+        FlyEnabled = not FlyEnabled
+        if Options.Fly then Options.Fly:SetValue(FlyEnabled) end
+        if FlyEnabled then StartFly() else StopFly() end
+        SaveAllSettings()
+    elseif i.KeyCode == Enum.KeyCode.N then
+        NoclipEnabled = not NoclipEnabled
+        if Options.Noclip then Options.Noclip:SetValue(NoclipEnabled) end
+        SaveAllSettings()
+    elseif i.KeyCode == Enum.KeyCode.J then
+        InfJumpEnabled = not InfJumpEnabled
+        if Options.InfJump then Options.InfJump:SetValue(InfJumpEnabled) end
+        SaveAllSettings()
+    elseif i.KeyCode == CoinGrabKey then
+        actionCoinGrab()
+    elseif i.KeyCode == GodModeKey then
+        GodModeEnabled = not GodModeEnabled
+        if Options.Godmode then Options.Godmode:SetValue(GodModeEnabled) end
+        if GodModeEnabled then applyGodmode() end
+        SaveAllSettings()
+    elseif i.KeyCode == TeleportGunKey then
+        actionTeleportGun()
+    end
+end)
+
+if XrayEnabled then EnableXray() end
+if FullBrightEnabled then task.spawn(ApplyFullBright) end
+if StatsEnabled then
+    task.spawn(function()
+        task.wait(1)
+        if not statsGui then createStatsGui() end
+        task.spawn(updateStatsLoop)
+    end)
+end
+if FlyEnabled then StartFly() end
+if BtnTPMurder then toggleMoveableBtn(true, "TP Murder", actionTPMurder, Color3.fromRGB(255,60,60)) end
+if BtnTPSheriff then toggleMoveableBtn(true, "TP Sheriff", actionTPSheriff, Color3.fromRGB(80,150,255)) end
+if BtnPickupGun then toggleMoveableBtn(true, "Pickup Gun", actionPickupGun, Color3.fromRGB(170,120,255)) end
+if BtnKillAll then toggleMoveableBtn(true, "Kill All", actionKillAll, Color3.fromRGB(255,60,60)) end
+if BtnShootMurder then toggleMoveableBtn(true, "Shoot Murder", actionShootMurder, Color3.fromRGB(0,255,100)) end
+if RoleNotifyEnabled then task.spawn(roleNotifyLoop) end
+if GodModeEnabled then
+    task.spawn(function()
+        task.wait(1)
+        applyGodmode()
+    end)
+end
+if AutoFarmEnabled then task.spawn(autoFarmLoop) end
+
+Window:SelectTab(1)
+notify("Green Hub", "Loaded! RightShift to toggle", 4)
