@@ -49,13 +49,42 @@ local function notify(title, content, dur)
     Fluent:Notify({Title = title, Content = content or "", Duration = dur or 3})
 end
 
+pcall(function()
+    if not Fluent.Themes then return end
+    local themeName = Fluent.Themes.Darker and "Darker" or (Fluent.Themes.Dark and "Dark")
+    if not themeName then return end
+    local base = Fluent.Themes[themeName]
+    if not base then return end
+    for k, v in pairs(base) do
+        if typeof(v) == "Color3" then
+            local _, _, val = v:ToHSV()
+            if k == "Accent" then
+                base[k] = Color3.fromRGB(0, 255, 0)
+            elseif val < 0.15 then
+                base[k] = Color3.fromRGB(0, 0, 0)
+            elseif val < 0.35 then
+                base[k] = Color3.fromRGB(10, 10, 10)
+            elseif val < 0.55 then
+                base[k] = Color3.fromRGB(20, 20, 20)
+            end
+        end
+    end
+    base.Accent = Color3.fromRGB(0, 255, 0)
+    base.WindowBg = Color3.fromRGB(0, 0, 0)
+    base.TitleBar = Color3.fromRGB(0, 0, 0)
+    base.TabBar = Color3.fromRGB(0, 0, 0)
+    base.Tab = Color3.fromRGB(0, 0, 0)
+    base.Element = Color3.fromRGB(10, 10, 10)
+    base.ElementBorder = Color3.fromRGB(30, 30, 30)
+end)
+
 local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
     SubTitle    = "sox7829",
     TabWidth    = 160,
     Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
-    Theme       = "Darker",
+    Theme       = (Fluent.Themes and Fluent.Themes.Darker) and "Darker" or "Dark",
     MinimizeKey = Enum.KeyCode.RightShift,
     Search      = true,
 })
@@ -412,6 +441,7 @@ local function sellEverything()
         end
     end
     notify("Sell", "Sending " .. count .. " logs", 3)
+    return count
 end
 
 local function getEquippedOrBackpackAxe()
@@ -1628,17 +1658,23 @@ Tabs.Visuals:AddButton({Title = "Restore Lighting", Callback = function()
     Lighting.Ambient = Color3.fromRGB(70, 70, 70)
 end})
 
+local autoSellOn = false
 Tabs.Automation:AddToggle("AutoSell", {
     Title = "Auto Sell", Default = false,
     Callback = function(state)
-        if state then
-            task.spawn(function()
-                while Options.AutoSell.Value and _G.MasterActive do
-                    sellEverything()
-                    task.wait(3)
-                end
-            end)
+        autoSellOn = state
+        if not state then
+            notify("Auto Sell", "Stopped", 2)
+            return
         end
+        notify("Auto Sell", "Started", 2)
+        task.spawn(function()
+            while autoSellOn and _G.MasterActive do
+                local ok, err = pcall(sellEverything)
+                if not ok then notify("Auto Sell Error", tostring(err), 5) end
+                task.wait(3)
+            end
+        end)
     end,
 })
 
@@ -2142,9 +2178,27 @@ local function applyPaint(mode)
     setPaint(mode)
 end
 
+local CORNER_RADIUS = 8
+local function roundCorners()
+    local hub = getHub()
+    if not hub then return end
+    for _, d in ipairs(hub:GetDescendants()) do
+        if d:IsA("GuiObject") then
+            local c = d:FindFirstChildOfClass("UICorner")
+            if c then c.CornerRadius = UDim.new(0, CORNER_RADIUS) end
+        end
+    end
+end
+task.spawn(function()
+    task.wait(1)
+    pcall(roundCorners)
+    task.wait(2)
+    pcall(roundCorners)
+end)
 task.spawn(function()
     while _G.MasterActive do
         if paintMode ~= "none" then pcall(setPaint, paintMode, true) end
+        pcall(roundCorners)
         task.wait(0.5)
     end
 end)
@@ -2504,35 +2558,6 @@ task.spawn(function()
     end
     if data then applyConfig(data) end
     cfgReady = true
-end)
-
-pcall(function()
-    local base = Fluent.Themes and (Fluent.Themes.Darker or Fluent.Themes.Dark)
-    if not base then return end
-    local t = {}
-    for k, v in pairs(base) do t[k] = v end
-    t.Accent = Color3.fromRGB(0, 255, 0)
-    t.AcrylicMain = Color3.fromRGB(0, 0, 0)
-    t.Window = Color3.fromRGB(0, 0, 0)
-    t.TitleBar = Color3.fromRGB(0, 0, 0)
-    t.TabBar = Color3.fromRGB(0, 0, 0)
-    t.Tab = Color3.fromRGB(0, 0, 0)
-    t.TabBgTransparency = 1
-    t.TabBorderTransparency = 1
-    t.Element = Color3.fromRGB(10, 10, 10)
-    t.ElementBorder = Color3.fromRGB(30, 30, 30)
-    t.TabActive = Color3.fromRGB(30, 30, 30)
-    t.TabActiveBorder = Color3.fromRGB(0, 255, 0)
-    t.TabActiveText = Color3.fromRGB(0, 255, 0)
-    t.TabActiveIcon = Color3.fromRGB(0, 255, 0)
-    t.TabIcon = Color3.fromRGB(0, 255, 0)
-    t.TabText = Color3.fromRGB(255, 255, 255)
-    t.TitleBarText = Color3.fromRGB(255, 255, 255)
-    t.ElementButtonBorder = Color3.fromRGB(0, 255, 0)
-    t.ElementToggle = Color3.fromRGB(0, 255, 0)
-    Fluent.Themes.Amoled = t
-    local okTheme = pcall(function() Fluent:SetTheme("Amoled") end)
-    if not okTheme then pcall(function() Window:SetTheme("Amoled") end) end
 end)
 
 Window:SelectTab(1)
