@@ -45,38 +45,14 @@ local ultraConn
 local vehFlyOn = false
 local vehSpeedOn = false
 
+local notifyLast = {}
 local function notify(title, content, dur)
+    local key = tostring(title) .. "|" .. tostring(content)
+    local now = tick()
+    if notifyLast[key] and now - notifyLast[key] < 1.5 then return end
+    notifyLast[key] = now
     Fluent:Notify({Title = title, Content = content or "", Duration = dur or 3})
 end
-
-pcall(function()
-    if not Fluent.Themes then return end
-    local themeName = Fluent.Themes.Darker and "Darker" or (Fluent.Themes.Dark and "Dark")
-    if not themeName then return end
-    local base = Fluent.Themes[themeName]
-    if not base then return end
-    for k, v in pairs(base) do
-        if typeof(v) == "Color3" then
-            local _, _, val = v:ToHSV()
-            if k == "Accent" then
-                base[k] = Color3.fromRGB(0, 255, 0)
-            elseif val < 0.15 then
-                base[k] = Color3.fromRGB(0, 0, 0)
-            elseif val < 0.35 then
-                base[k] = Color3.fromRGB(10, 10, 10)
-            elseif val < 0.55 then
-                base[k] = Color3.fromRGB(20, 20, 20)
-            end
-        end
-    end
-    base.Accent = Color3.fromRGB(0, 255, 0)
-    base.WindowBg = Color3.fromRGB(0, 0, 0)
-    base.TitleBar = Color3.fromRGB(0, 0, 0)
-    base.TabBar = Color3.fromRGB(0, 0, 0)
-    base.Tab = Color3.fromRGB(0, 0, 0)
-    base.Element = Color3.fromRGB(10, 10, 10)
-    base.ElementBorder = Color3.fromRGB(30, 30, 30)
-end)
 
 local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
@@ -84,7 +60,7 @@ local Window = Fluent:CreateWindow({
     TabWidth    = 160,
     Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
-    Theme       = (Fluent.Themes and Fluent.Themes.Darker) and "Darker" or "Dark",
+    Theme       = "Darker",
     MinimizeKey = Enum.KeyCode.RightShift,
     Search      = true,
 })
@@ -417,31 +393,28 @@ end
 
 local SELL_CF = CFrame.new(315, -0.296, 85.791) * CFrame.Angles(math.rad(90), 0, 0)
 
-local function sellEverything()
+local function sellEverything(silent)
     local count = 0
     for _, Log in pairs(workspace.LogModels:GetChildren()) do
         if Log.Name:sub(1, 6) == "Loose_" and Log:FindFirstChild("Owner") and Log.Owner.Value == LocalPlayer then
             count += 1
-            for _, v in pairs(Log:GetChildren()) do
-                if v.Name == "WoodSection" then
-                    task.spawn(function()
-                        for _ = 1, 10 do
-                            task.wait()
-                            v.CFrame = SELL_CF
-                        end
-                    end)
-                end
+            local section = Log:FindFirstChild("WoodSection")
+            if section then
+                task.spawn(function()
+                    for _ = 1, 8 do
+                        if section.Parent then section.CFrame = SELL_CF end
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        task.wait()
+                    end
+                end)
             end
-            task.spawn(function()
-                for _ = 1, 20 do
-                    task.wait()
-                    ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
-                end
-            end)
         end
     end
-    notify("Sell", "Sending " .. count .. " logs", 3)
-    return count
+    if not silent then
+        notify("Sell", "Sending " .. count .. " logs", 2)
+    end
 end
 
 local function getEquippedOrBackpackAxe()
@@ -548,7 +521,7 @@ Tabs.Home:AddButton({Title = "Copy Server Link", Callback = function()
     notify("Copied", "Server link copied")
 end})
 Tabs.Home:AddButton({Title = "Bring All Loose Wood", Callback = bringAllLoose})
-Tabs.Home:AddButton({Title = "Sell Everything", Callback = sellEverything})
+Tabs.Home:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
 Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
     _G.MasterActive = false
     _G.AbortAction = true
@@ -637,7 +610,7 @@ Tabs.Wood:AddSlider("WoodAmount", {
     Callback = function(v) woodAmount = v end,
 })
 Tabs.Wood:AddButton({Title = "Bring All Wood", Callback = bringAllLoose})
-Tabs.Wood:AddButton({Title = "Sell Everything", Callback = sellEverything})
+Tabs.Wood:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
 
 local SelectMode = false
 local selectedItems = {}
@@ -1586,7 +1559,7 @@ local function createOnScreenButton(item, index)
     btn.TextSize = 14
     btn.Text = item.Label .. ": Off"
     btn.Parent = onScreenGui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
     local stroke = Instance.new("UIStroke", btn)
     stroke.Color = item.Color
     stroke.Thickness = 2
@@ -1658,23 +1631,17 @@ Tabs.Visuals:AddButton({Title = "Restore Lighting", Callback = function()
     Lighting.Ambient = Color3.fromRGB(70, 70, 70)
 end})
 
-local autoSellOn = false
 Tabs.Automation:AddToggle("AutoSell", {
     Title = "Auto Sell", Default = false,
     Callback = function(state)
-        autoSellOn = state
-        if not state then
-            notify("Auto Sell", "Stopped", 2)
-            return
+        if state then
+            task.spawn(function()
+                while Options.AutoSell.Value and _G.MasterActive do
+                    sellEverything(true)
+                    task.wait(0.3)
+                end
+            end)
         end
-        notify("Auto Sell", "Started", 2)
-        task.spawn(function()
-            while autoSellOn and _G.MasterActive do
-                local ok, err = pcall(sellEverything)
-                if not ok then notify("Auto Sell Error", tostring(err), 5) end
-                task.wait(3)
-            end
-        end)
     end,
 })
 
@@ -1765,7 +1732,7 @@ Tabs.Farm:AddToggle("AutoFarm", {
                     end
                     hrp.CFrame = curpos
                     farmStatus:SetDesc("Selling")
-                    sellEverything()
+                    sellEverything(true)
                     task.wait(2)
                     farmStatus:SetDesc("Farming " .. autoFarmWoodType)
                 end)
@@ -1783,23 +1750,6 @@ local chopCooldown = {}
 local activeCount = 0
 local chopLoopId = 0
 
-local allChopTypes = {
-    "Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple",
-    "Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler",
-    "GreenSwampy","SnowGlow","Zombie","BlueSpruce",
-}
-local selectedChopTypes = {}
-local chopAnyType = true
-
-local function typeAllowed(clas)
-    if clas == "LoneCave" then return false end
-    if chopAnyType then return true end
-    for _, v in ipairs(selectedChopTypes) do
-        if v == clas then return true end
-    end
-    return false
-end
-
 local function treeFree(t)
     local o = t:FindFirstChild("Owner")
     return not o or o.Value == nil or o.Value == LocalPlayer
@@ -1813,7 +1763,7 @@ local function nearbyTrees(count)
         if region.Name == "TreeRegion" then
             for _, t in ipairs(region:GetChildren()) do
                 if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass")
-                    and typeAllowed(t.TreeClass.Value) and not choppingNow[t]
+                    and t.TreeClass.Value ~= "LoneCave" and not choppingNow[t]
                     and (chopCooldown[t] or 0) < tick() and treeFree(t) then
                     local d = (t:GetPivot().Position - hrp.Position).Magnitude
                     if d <= CHOP_RANGE then table.insert(list, {tree = t, dist = d}) end
@@ -1833,49 +1783,23 @@ local function chopTree(tree, loopId)
     pcall(function()
         local clas = tree.TreeClass.Value
         local started = tick()
-        while autoChopOn and chopLoopId == loopId and _G.MasterActive
-            and tree.Parent and tree:FindFirstChild("CutEvent")
-            and treeFree(tree) and tick() - started < 40 do
+        while autoChopOn and chopLoopId == loopId and _G.MasterActive and tree.Parent
+            and tree:FindFirstChild("CutEvent") and treeFree(tree) and tick() - started < 40 do
             local ax = getEquippedOrBackpackAxe()
-            local stats = ax and getAxStats(ax.ToolName.Value, clas)
-            if ax and stats and stats.Damage and stats.SwingCooldown then
-                pcall(function()
-                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                        tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0),
-                        sectionId = 1, hitPoints = stats.Damage,
-                        cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                    })
-                end)
-                task.wait(stats.SwingCooldown)
-            else
-                task.wait(0.3)
-            end
+            if not ax then break end
+            local stats = getAxStats(ax.ToolName.Value, clas)
+            if not stats then break end
+            ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+                tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
+                hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+            })
+            task.wait(stats.SwingCooldown)
         end
     end)
     chopCooldown[tree] = tick() + 20
     choppingNow[tree] = nil
     activeCount -= 1
 end
-
-Tabs.AutoChop:AddDropdown("ChopTypes", {
-    Title = "Wood Types (empty = all)",
-    Multi = true,
-    Default = {},
-    Values = allChopTypes,
-    Callback = function(v)
-        selectedChopTypes = {}
-        local n = 0
-        if type(v) == "table" then
-            for name, on in pairs(v) do
-                if on then
-                    table.insert(selectedChopTypes, name)
-                    n += 1
-                end
-            end
-        end
-        chopAnyType = n == 0
-    end,
-})
 
 Tabs.AutoChop:AddToggle("AutoChopToggle", {
     Title = "Auto Chop", Default = false,
@@ -1975,7 +1899,7 @@ Tabs.Misc:AddButton({Title = "Print All Remotes", Callback = function()
     end
     notify("Misc", "Remotes printed to console")
 end})
-Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = sellEverything})
+Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = function() sellEverything(false) end})
 
 Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function()
     notify("Dupe", "Axe dupe is patched", 3)
@@ -2047,7 +1971,7 @@ ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.TextSize = 14
 ToggleBtn.AutoButtonColor = false
 ToggleBtn.Parent = ToggleGui
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 9)
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
 local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
 ToggleStroke.Color = Color3.fromRGB(0, 255, 0)
 ToggleStroke.Thickness = 2
@@ -2118,10 +2042,55 @@ Tabs.Settings:AddDropdown("TogglePos", {
 })
 Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
 
+task.spawn(function()
+    task.wait(1)
+    while _G.MasterActive do
+        if Fluent.GUI and Fluent.GUI.Parent then
+            for _, d in ipairs(Fluent.GUI:GetDescendants()) do
+                if d:IsA("GuiObject") then
+                    local c = d:FindFirstChildOfClass("UICorner")
+                    if not c then
+                        c = Instance.new("UICorner")
+                        c.Parent = d
+                    end
+                    pcall(function()
+                        if c.CornerRadius.Scale < 0.9 then
+                            c.CornerRadius = UDim.new(0, 14)
+                        end
+                    end)
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+if Fluent.GUI then
+    track(Fluent.GUI.DescendantAdded:Connect(function(d)
+        if d:IsA("GuiObject") then
+            task.defer(function()
+                if d.Parent then
+                    local c = d:FindFirstChildOfClass("UICorner")
+                    if not c then
+                        c = Instance.new("UICorner")
+                        c.Parent = d
+                    end
+                    pcall(function()
+                        if c.CornerRadius.Scale < 0.9 then
+                            c.CornerRadius = UDim.new(0, 14)
+                        end
+                    end)
+                end
+            end)
+        end
+    end))
+end
+
 local paintSaved = setmetatable({}, {__mode = "k"})
 local paintMode = "none"
 local outlineColor = Color3.fromRGB(0, 255, 0)
 local GREEN = Color3.fromRGB(0, 255, 0)
+local BLACKBG = Color3.fromRGB(0, 0, 0)
 local switching = false
 
 local function rootStroke()
@@ -2149,12 +2118,19 @@ local function setPaint(mode, quiet)
         gs.Enabled = mode ~= "none"
         gs.Color = outlineColor
     end
+    if mode == "black" then
+        if Window.Root then
+            pcall(function()
+                Window.Root.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            end)
+        end
+    end
     for _, d in ipairs(hub:GetDescendants()) do
         if not paintSaved[d] then
             paintSaved[d] = {
                 stroke = d:IsA("UIStroke") and d.Color or nil,
                 bg = d:IsA("GuiObject") and d.BackgroundColor3 or nil,
-                text = (d:IsA("TextLabel") or d:IsA("TextButton")) and d.TextColor3 or nil,
+                text = (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and d.TextColor3 or nil,
             }
         end
         local o = paintSaved[d]
@@ -2163,12 +2139,20 @@ local function setPaint(mode, quiet)
         elseif d:IsA("GuiObject") and o.bg then
             if mode == "full" and d.BackgroundTransparency < 1 then
                 d.BackgroundColor3 = GREEN
-            elseif mode ~= "full" then
+            elseif mode == "black" and d.BackgroundTransparency < 1 then
+                d.BackgroundColor3 = BLACKBG
+            elseif mode ~= "full" and mode ~= "black" then
                 d.BackgroundColor3 = o.bg
             end
         end
         if o.text then
-            d.TextColor3 = (mode == "full") and Color3.new(0, 0, 0) or o.text
+            if mode == "full" then
+                d.TextColor3 = Color3.new(0, 0, 0)
+            elseif mode == "black" then
+                d.TextColor3 = outlineColor
+            else
+                d.TextColor3 = o.text
+            end
         end
     end
 end
@@ -2178,28 +2162,10 @@ local function applyPaint(mode)
     setPaint(mode)
 end
 
-local CORNER_RADIUS = 8
-local function roundCorners()
-    local hub = getHub()
-    if not hub then return end
-    for _, d in ipairs(hub:GetDescendants()) do
-        if d:IsA("GuiObject") then
-            local c = d:FindFirstChildOfClass("UICorner")
-            if c then c.CornerRadius = UDim.new(0, CORNER_RADIUS) end
-        end
-    end
-end
-task.spawn(function()
-    task.wait(1)
-    pcall(roundCorners)
-    task.wait(2)
-    pcall(roundCorners)
-end)
 task.spawn(function()
     while _G.MasterActive do
         if paintMode ~= "none" then pcall(setPaint, paintMode, true) end
-        pcall(roundCorners)
-        task.wait(0.5)
+        task.wait(0.3)
     end
 end)
 
@@ -2273,6 +2239,24 @@ Tabs.Settings:AddColorpicker("OutlineColor", {
     end,
 })
 
+Tabs.Settings:AddToggle("BlackTheme", {
+    Title = "Black Theme", Default = false,
+    Callback = function(s)
+        if switching then return end
+        if s then
+            switching = true
+            Options.GreenOutline:SetValue(false)
+            Options.GreenFull:SetValue(false)
+            Options.GreenUltra:SetValue(false)
+            switching = false
+            if ultraOn then applyUltra(false) end
+            applyPaint("black")
+        elseif paintMode == "black" then
+            applyPaint("none")
+        end
+    end,
+})
+
 Tabs.Settings:AddToggle("GreenOutline", {
     Title = "Green Green Hub", Default = false,
     Callback = function(s)
@@ -2281,6 +2265,7 @@ Tabs.Settings:AddToggle("GreenOutline", {
             switching = true
             Options.GreenFull:SetValue(false)
             Options.GreenUltra:SetValue(false)
+            Options.BlackTheme:SetValue(false)
             switching = false
             if ultraOn then applyUltra(false) end
             applyPaint("outline")
@@ -2297,6 +2282,7 @@ Tabs.Settings:AddToggle("GreenFull", {
             switching = true
             Options.GreenOutline:SetValue(false)
             Options.GreenUltra:SetValue(false)
+            Options.BlackTheme:SetValue(false)
             switching = false
             if ultraOn then applyUltra(false) end
             applyPaint("full")
@@ -2313,6 +2299,7 @@ Tabs.Settings:AddToggle("GreenUltra", {
             switching = true
             Options.GreenOutline:SetValue(false)
             Options.GreenFull:SetValue(false)
+            Options.BlackTheme:SetValue(false)
             switching = false
             applyPaint("full")
             applyUltra(true)
