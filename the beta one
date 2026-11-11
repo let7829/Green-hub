@@ -2090,6 +2090,7 @@ local paintSaved = setmetatable({}, {__mode = "k"})
 local paintMode = "none"
 local outlineColor = Color3.fromRGB(0, 255, 0)
 local GREEN = Color3.fromRGB(0, 255, 0)
+local LIME = Color3.fromRGB(0, 255, 0)
 local BLACKBG = Color3.fromRGB(0, 0, 0)
 local switching = false
 
@@ -2107,6 +2108,15 @@ local function rootStroke()
     return s
 end
 
+local function isSwitchElement(d)
+    if not d:IsA("Frame") then return false end
+    local sy = d.Size.Y.Offset
+    local sx = d.Size.X.Offset
+    if sy < 8 or sy > 32 then return false end
+    if sx < 8 or sx > 120 then return false end
+    return true
+end
+
 local function setPaint(mode, quiet)
     local hub = getHub()
     if not hub then
@@ -2118,12 +2128,10 @@ local function setPaint(mode, quiet)
         gs.Enabled = mode ~= "none"
         gs.Color = outlineColor
     end
-    if mode == "black" then
-        if Window.Root then
-            pcall(function()
-                Window.Root.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-            end)
-        end
+    if mode == "black" and Window.Root then
+        pcall(function()
+            Window.Root.BackgroundColor3 = BLACKBG
+        end)
     end
     for _, d in ipairs(hub:GetDescendants()) do
         if not paintSaved[d] then
@@ -2135,21 +2143,31 @@ local function setPaint(mode, quiet)
         end
         local o = paintSaved[d]
         if d:IsA("UIStroke") and d.Name ~= "GH_Outline" then
-            d.Color = (mode == "none") and o.stroke or outlineColor
+            if mode == "none" then
+                d.Color = o.stroke
+            elseif mode == "outline" or mode == "full" then
+                d.Color = outlineColor
+            elseif mode == "black" then
+                d.Color = o.stroke
+            end
         elseif d:IsA("GuiObject") and o.bg then
-            if mode == "full" and d.BackgroundTransparency < 1 then
-                d.BackgroundColor3 = GREEN
-            elseif mode == "black" and d.BackgroundTransparency < 1 then
-                d.BackgroundColor3 = BLACKBG
-            elseif mode ~= "full" and mode ~= "black" then
-                d.BackgroundColor3 = o.bg
+            if d.BackgroundTransparency < 1 then
+                if mode == "full" then
+                    d.BackgroundColor3 = GREEN
+                elseif mode == "black" then
+                    if isSwitchElement(d) then
+                        d.BackgroundColor3 = LIME
+                    else
+                        d.BackgroundColor3 = BLACKBG
+                    end
+                elseif mode == "none" or mode == "outline" then
+                    d.BackgroundColor3 = o.bg
+                end
             end
         end
         if o.text then
             if mode == "full" then
                 d.TextColor3 = Color3.new(0, 0, 0)
-            elseif mode == "black" then
-                d.TextColor3 = outlineColor
             else
                 d.TextColor3 = o.text
             end
@@ -2240,17 +2258,17 @@ Tabs.Settings:AddColorpicker("OutlineColor", {
 })
 
 Tabs.Settings:AddToggle("BlackTheme", {
-    Title = "Black Theme", Default = false,
+    Title = "Black Theme", Default = true,
     Callback = function(s)
         if switching then return end
         if s then
             switching = true
-            Options.GreenOutline:SetValue(false)
-            Options.GreenFull:SetValue(false)
-            Options.GreenUltra:SetValue(false)
+            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
             switching = false
             if ultraOn then applyUltra(false) end
-            applyPaint("black")
+            task.defer(function() applyPaint("black") end)
         elseif paintMode == "black" then
             applyPaint("none")
         end
@@ -2263,9 +2281,9 @@ Tabs.Settings:AddToggle("GreenOutline", {
         if switching then return end
         if s then
             switching = true
-            Options.GreenFull:SetValue(false)
-            Options.GreenUltra:SetValue(false)
-            Options.BlackTheme:SetValue(false)
+            if Options.GreenFull then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
             switching = false
             if ultraOn then applyUltra(false) end
             applyPaint("outline")
@@ -2280,9 +2298,9 @@ Tabs.Settings:AddToggle("GreenFull", {
         if switching then return end
         if s then
             switching = true
-            Options.GreenOutline:SetValue(false)
-            Options.GreenUltra:SetValue(false)
-            Options.BlackTheme:SetValue(false)
+            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
+            if Options.GreenUltra then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
             switching = false
             if ultraOn then applyUltra(false) end
             applyPaint("full")
@@ -2297,9 +2315,9 @@ Tabs.Settings:AddToggle("GreenUltra", {
         if switching then return end
         if s then
             switching = true
-            Options.GreenOutline:SetValue(false)
-            Options.GreenFull:SetValue(false)
-            Options.BlackTheme:SetValue(false)
+            if Options.GreenOutline then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull then Options.GreenFull:SetValue(false) end
+            if Options.BlackTheme then Options.BlackTheme:SetValue(false) end
             switching = false
             applyPaint("full")
             applyUltra(true)
