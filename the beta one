@@ -1632,11 +1632,11 @@ Tabs.Visuals:AddButton({Title = "Restore Lighting", Callback = function()
 end})
 
 local autoChopOn = false
-local CHOP_RANGE = 250
-local MAX_AT_ONCE = 30
+local CHOP_RANGE = 80
+local MAX_AT_ONCE = 5
 local CHOP_TREE_KIND = "All"
 local choppingNow = {}
-local chopCooldown = {}
+local chopFailed = {}
 local activeCount = 0
 local chopLoopId = 0
 
@@ -1654,7 +1654,8 @@ local function nearbyTrees(count)
             for _, t in ipairs(region:GetChildren()) do
                 if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass")
                     and t.TreeClass.Value ~= "LoneCave" and not choppingNow[t]
-                    and (chopCooldown[t] or 0) < tick() and treeFree(t)
+                    and (chopFailed[t] or 0) < tick()
+                    and treeFree(t)
                     and (CHOP_TREE_KIND == "All" or t.TreeClass.Value == CHOP_TREE_KIND) then
                     local d = (t:GetPivot().Position - hrp.Position).Magnitude
                     if d <= CHOP_RANGE then table.insert(list, {tree = t, dist = d}) end
@@ -1669,36 +1670,49 @@ local function nearbyTrees(count)
 end
 
 local function chopTree(tree, loopId)
+    local gotAnyLog = false
     pcall(function()
         local clas = tree.TreeClass.Value
-        local started = tick()
-        local logsSpawned = 0
+        local lastLog = tick()
+        local startTime = tick()
+        local gotLog = false
         local logConn = workspace.LogModels.ChildAdded:Connect(function(l)
             local o = l:FindFirstChild("Owner")
-            if o and o.Value == LocalPlayer then logsSpawned += 1 end
+            if o and o.Value == LocalPlayer then
+                lastLog = tick()
+                gotLog = true
+                gotAnyLog = true
+            end
         end)
         while autoChopOn and chopLoopId == loopId and _G.MasterActive do
             if not tree.Parent or not tree:FindFirstChild("CutEvent") then break end
             local ax = getEquippedOrBackpackAxe()
-            if not ax then break end
-            local stats = getAxStats(ax.ToolName.Value, clas)
-            if not stats then break end
-            ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-            })
-            task.wait(stats.SwingCooldown)
-            local elapsed = tick() - started
-            if elapsed > 8 and logsSpawned == 0 then break end
-            if elapsed > 90 then break end
+            if not ax then
+                task.wait(0.5)
+            else
+                local stats = getAxStats(ax.ToolName.Value, clas)
+                if not stats then
+                    task.wait(0.5)
+                else
+                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+                        tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
+                        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+                    })
+                    task.wait(stats.SwingCooldown)
+                end
+            end
+            if gotLog and tick() - lastLog > 10 then break end
+            if tick() - startTime > 90 then break end
         end
         logConn:Disconnect()
     end)
+    if not gotAnyLog and tree.Parent and tree:FindFirstChild("CutEvent") then
+        chopFailed[tree] = tick() + 5
+    else
+        chopFailed[tree] = nil
+    end
     choppingNow[tree] = nil
     activeCount -= 1
-    if tree.Parent and tree:FindFirstChild("CutEvent") then
-        chopCooldown[tree] = tick() + 5
-    end
 end
 
 Tabs.AutoChop:AddDropdown("AutoChopTree", {
@@ -1706,14 +1720,6 @@ Tabs.AutoChop:AddDropdown("AutoChopTree", {
     Values = {"All","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"},
     Multi = false, Default = 1,
     Callback = function(v) CHOP_TREE_KIND = v end,
-})
-Tabs.AutoChop:AddSlider("AutoChopRange", {
-    Title = "Range", Default = 250, Min = 20, Max = 1000, Rounding = 0,
-    Callback = function(v) CHOP_RANGE = v end,
-})
-Tabs.AutoChop:AddSlider("AutoChopMax", {
-    Title = "Max Trees At Once", Default = 30, Min = 1, Max = 60, Rounding = 0,
-    Callback = function(v) MAX_AT_ONCE = v end,
 })
 Tabs.AutoChop:AddToggle("AutoChopToggle", {
     Title = "Auto Chop", Default = false,
@@ -1734,7 +1740,7 @@ Tabs.AutoChop:AddToggle("AutoChopToggle", {
                         end
                     end
                 end
-                task.wait(0.5)
+                task.wait(0.3)
             end
         end)
     end,
