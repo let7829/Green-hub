@@ -1,18 +1,6 @@
 local Fluent = loadstring(game:HttpGet(
-    "https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"
+    "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
 ))()
-
-Fluent:RegisterCustomTheme("Amoled", {
-    Accent       = Color3.fromRGB(0, 255, 0),
-    AcrylicMain  = Color3.fromRGB(0, 0, 0),
-    Background   = Color3.fromRGB(0, 0, 0),
-    Text         = Color3.fromRGB(255, 255, 255),
-    IconColor    = Color3.fromRGB(0, 255, 0),
-    IconSize     = 18,
-    ShineEnabled = false,
-    StrokeShine  = false,
-    StrokeDark   = Color3.fromRGB(20, 20, 20),
-})
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -20,6 +8,7 @@ local UIS = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
 local VU = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
@@ -35,8 +24,6 @@ _G.VehFlySpeed = 120
 _G.ESPToggled = false
 _G.MasterActive = true
 _G.AbortAction = false
-_G.HubTransparent = false
-_G.ForceBlack = true
 
 local Connections = {}
 local function track(conn)
@@ -53,43 +40,50 @@ local function dc(c)
     if c then pcall(function() c:Disconnect() end) end
 end
 
-local flyConn, vehFlyConn, draggerConn, autoRejoinConn
+local draggerConn, autoRejoinConn
+local ultraConn
 local vehFlyOn = false
 local vehSpeedOn = false
 
+local notifyLast = {}
 local function notify(title, content, dur)
+    local key = tostring(title) .. "|" .. tostring(content)
+    local now = tick()
+    if notifyLast[key] and now - notifyLast[key] < 1.5 then return end
+    notifyLast[key] = now
     Fluent:Notify({Title = title, Content = content or "", Duration = dur or 3})
 end
 
 local Window = Fluent:CreateWindow({
     Title       = "Green Hub",
-    SubTitle    = "sox7829",
+    SubTitle    = "Sox7829|Let7829 V3",
     TabWidth    = 160,
     Size        = UDim2.fromOffset(680, 340),
     Acrylic     = false,
-    Theme       = "Amoled",
+    Theme       = "Darker",
     MinimizeKey = Enum.KeyCode.RightShift,
     Search      = true,
 })
 
 local Tabs = {
-    Home       = Window:AddTab({Title = "Home", Icon = "solar/home-bold"}),
-    Wood       = Window:AddTab({Title = "Wood", Icon = "lucide/trees"}),
-    Farm       = Window:AddTab({Title = "Farm", Icon = "lucide/sprout"}),
-    Player     = Window:AddTab({Title = "Player", Icon = "lucide/user"}),
-    Teleport   = Window:AddTab({Title = "Teleport", Icon = "lucide/map-pin"}),
-    Autobuy    = Window:AddTab({Title = "Autobuy", Icon = "lucide/shopping-cart"}),
-    Vehicle    = Window:AddTab({Title = "Vehicle", Icon = "lucide/car"}),
-    World      = Window:AddTab({Title = "World", Icon = "lucide/globe"}),
-    Visuals    = Window:AddTab({Title = "Visuals", Icon = "lucide/eye"}),
-    OnScreen   = Window:AddTab({Title = "OnScreen", Icon = "lucide/monitor"}),
-    Automation = Window:AddTab({Title = "Automation", Icon = "lucide/repeat"}),
-    Bring      = Window:AddTab({Title = "Bring", Icon = "lucide/package"}),
-    Search     = Window:AddTab({Title = "Search", Icon = "lucide/search"}),
-    Slots      = Window:AddTab({Title = "Slots", Icon = "lucide/save"}),
-    Misc       = Window:AddTab({Title = "Misc", Icon = "lucide/wrench"}),
-    Dupe       = Window:AddTab({Title = "Dupe", Icon = "lucide/copy"}),
-    Settings   = Window:AddTab({Title = "Settings", Icon = "lucide/settings"}),
+    Home       = Window:AddTab({Title = "Home",       Icon = "home"}),
+    Wood       = Window:AddTab({Title = "Wood",       Icon = "trees"}),
+    Farm       = Window:AddTab({Title = "Farm",       Icon = "sprout"}),
+    Player     = Window:AddTab({Title = "Player",     Icon = "user"}),
+    Teleport   = Window:AddTab({Title = "Teleport",   Icon = "map-pin"}),
+    Autobuy    = Window:AddTab({Title = "Autobuy",    Icon = "shopping-cart"}),
+    Vehicle    = Window:AddTab({Title = "Vehicle",    Icon = "car"}),
+    World      = Window:AddTab({Title = "World",      Icon = "globe"}),
+    Visuals    = Window:AddTab({Title = "Visuals",    Icon = "eye"}),
+    AutoChop   = Window:AddTab({Title = "Auto Chop",  Icon = "axe"}),
+    OnScreen   = Window:AddTab({Title = "OnScreen",   Icon = "monitor"}),
+    Automation = Window:AddTab({Title = "Automation", Icon = "repeat"}),
+    Bring      = Window:AddTab({Title = "Bring",      Icon = "package"}),
+    Search     = Window:AddTab({Title = "Search",     Icon = "search"}),
+    Slots      = Window:AddTab({Title = "Slots",      Icon = "save"}),
+    Misc       = Window:AddTab({Title = "Misc",       Icon = "wrench"}),
+    Dupe       = Window:AddTab({Title = "Dupe",       Icon = "copy"}),
+    Settings   = Window:AddTab({Title = "Settings",   Icon = "settings"}),
 }
 
 local Options = Fluent.Options
@@ -306,12 +300,6 @@ local function UpdatePlayerESP()
         end
     end
 end
-task.spawn(function()
-    while _G.MasterActive do
-        UpdatePlayerESP()
-        task.wait(0.5)
-    end
-end)
 
 local itemESPActive = false
 local itemESPBBs = {}
@@ -403,22 +391,30 @@ local function bringAllLoose()
     notify("Wood", "Brought " .. count .. " logs")
 end
 
-local function sellEverything()
-    pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/YZMvDRHB", true))() end)
-end
+local SELL_CF = CFrame.new(315, -0.296, 85.791) * CFrame.Angles(math.rad(90), 0, 0)
 
-local function getNearestVehicleSeat()
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    local nearest, nearestDist = nil, math.huge
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("VehicleSeat") then
-            local d = (obj.Position - hrp.Position).Magnitude
-            if d < nearestDist then nearest = obj nearestDist = d end
+local function sellEverything(silent)
+    local count = 0
+    for _, Log in pairs(workspace.LogModels:GetChildren()) do
+        if Log.Name:sub(1, 6) == "Loose_" and Log:FindFirstChild("Owner") and Log.Owner.Value == LocalPlayer then
+            count += 1
+            local section = Log:FindFirstChild("WoodSection")
+            if section then
+                task.spawn(function()
+                    for _ = 1, 8 do
+                        if section.Parent then section.CFrame = SELL_CF end
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(Log)
+                        task.wait()
+                    end
+                end)
+            end
         end
     end
-    return nearest
+    if not silent then
+        notify("Sell", "Sending " .. count .. " logs", 2)
+    end
 end
 
 local function getEquippedOrBackpackAxe()
@@ -508,268 +504,6 @@ local function lonecaveTree()
     end
 end
 
-local function aliveChar()
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if char and hum and hrp and hum.Health > 0 then
-        return char, hum, hrp
-    end
-end
-
-local function findEndTimesAxe(container)
-    if not container then return end
-    for _, v in ipairs(container:GetChildren()) do
-        if v:FindFirstChild("ToolName") and v.ToolName.Value == "EndTimesAxe" then
-            return v
-        end
-    end
-end
-
-local function droppedEndTimesAxe()
-    for _, v in ipairs(workspace:GetChildren()) do
-        if (v:IsA("Tool") or v:IsA("Model")) and v:FindFirstChild("ToolName")
-            and v.ToolName.Value == "EndTimesAxe" then
-            return v
-        end
-    end
-end
-
-local function pickupAxe(axe)
-    local _, _, hrp = aliveChar()
-    local part = axe:FindFirstChild("Handle") or axe:FindFirstChildWhichIsA("BasePart")
-    if not hrp or not part then return end
-    hrp.CFrame = part.CFrame + Vector3.new(0, 3, 0)
-    task.wait(0.3)
-    hrp.CFrame = part.CFrame
-    task.wait(0.5)
-end
-
-local function bringLonecave()
-    _G.AbortAction = false
-    local tree = lonecaveTree()
-    if not tree then notify("Lonecave", "Lonecave tree not found", 3) return end
-    local stats = getAxStats("EndTimesAxe", "LoneCave")
-    if not stats then notify("Lonecave", "No axe stats", 3) return end
-
-    local _, _, startHrp = aliveChar()
-    if not startHrp then notify("Lonecave", "No character", 2) return end
-    local curpos = startHrp.CFrame
-
-    local newLog
-    local con = workspace.LogModels.ChildAdded:Connect(function(l)
-        local o = l:WaitForChild("Owner", 2)
-        if o and o.Value == LocalPlayer then newLog = l end
-    end)
-
-    local fails = 0
-    while not newLog and not _G.AbortAction do
-        local char, hum, hrp = aliveChar()
-        if not char then
-            task.wait(1)
-        else
-            if not findEndTimesAxe(char) then
-                local dropped = droppedEndTimesAxe()
-                if dropped then pickupAxe(dropped) end
-                local inPack = findEndTimesAxe(LocalPlayer.Backpack)
-                if inPack and aliveChar() then
-                    aliveChar():FindFirstChildOfClass("Humanoid"):EquipTool(inPack)
-                    task.wait(0.3)
-                end
-            end
-
-            char, hum, hrp = aliveChar()
-            local ax = char and findEndTimesAxe(char)
-            if not ax then
-                fails += 1
-                if fails > 5 then
-                    notify("Lonecave", "Could not get the EndTimesAxe back", 3)
-                    break
-                end
-                task.wait(1)
-            else
-                fails = 0
-                local sc = treeStandCF(tree)
-                if sc then hrp.CFrame = sc end
-                task.wait(0.25)
-
-                local deadline = tick() + 60
-                repeat
-                    local c = aliveChar()
-                    local a = c and findEndTimesAxe(c)
-                    if not a then break end
-                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                        tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                    })
-                    task.wait(stats.SwingCooldown)
-                until newLog or _G.AbortAction or tick() > deadline
-            end
-        end
-    end
-    con:Disconnect()
-
-    if not newLog then
-        local c = aliveChar()
-        if c then c.HumanoidRootPart.CFrame = curpos end
-        notify("Lonecave", _G.AbortAction and "Aborted" or "Stopped", 2)
-        return
-    end
-
-    task.wait(0.15)
-    task.spawn(function()
-        for _ = 1, 60 do
-            ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
-            task.wait()
-        end
-    end)
-    task.wait(0.1)
-
-    newLog.PrimaryPart = newLog.WoodSection
-    for _ = 1, 60 do
-        newLog.PrimaryPart.Velocity = Vector3.zero
-        newLog:PivotTo(curpos)
-        task.wait()
-    end
-
-    local char = LocalPlayer.Character
-    if char then
-        char.Humanoid:UnequipTools()
-        task.wait()
-        char.Head:Destroy()
-    end
-    LocalPlayer.CharacterAdded:Wait()
-    task.wait(1.5)
-
-    local newHrp = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-    newHrp.CFrame = newLog.WoodSection.CFrame
-    notify("Lonecave", "Lonecave brought", 3)
-end
-
-local VOID_CF = CFrame.new(3392, -397, -3389)
-
-local function runSafeSuicide()
-    local char, hum, hrp = aliveChar()
-    if not char then return end
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.CFrame = VOID_CF
-    task.spawn(function()
-        local t = tick()
-        while tick() - t < 3 do
-            local c, h, r = aliveChar()
-            if not c or c ~= char then return end
-            r.AssemblyLinearVelocity = Vector3.zero
-            r.CFrame = VOID_CF
-            task.wait()
-        end
-        local c, h = aliveChar()
-        if c == char and h then h.Health = 0 end
-    end)
-end
-
-local function bringLonecaveSuicide()
-    _G.AbortAction = false
-    if _G.Flying and Options.FlyToggle then Options.FlyToggle:SetValue(false) end
-    local tree = lonecaveTree()
-    if not tree then notify("Lonecave", "Lonecave tree not found", 3) return end
-    local stats = getAxStats("EndTimesAxe", "LoneCave")
-    if not stats then notify("Lonecave", "No axe stats", 3) return end
-    local _, _, startHrp = aliveChar()
-    if not startHrp then notify("Lonecave", "No character", 2) return end
-    local curpos = startHrp.CFrame
-
-    local newLog
-    local con = workspace.LogModels.ChildAdded:Connect(function(l)
-        local o = l:WaitForChild("Owner", 2)
-        if o and o.Value == LocalPlayer then newLog = l end
-    end)
-
-    local function getAxe()
-        local c, h = aliveChar()
-        if not c then return nil end
-        local a = findEndTimesAxe(c)
-        if a then return a end
-        a = findEndTimesAxe(LocalPlayer.Backpack)
-        if not a then
-            local dropped = droppedEndTimesAxe()
-            if dropped then pickupAxe(dropped) end
-            a = findEndTimesAxe(LocalPlayer.Backpack)
-        end
-        if a then
-            h:EquipTool(a)
-            task.wait(0.3)
-            local c2 = aliveChar()
-            return c2 and findEndTimesAxe(c2)
-        end
-    end
-
-    while not newLog and not _G.AbortAction do
-        if not tree.Parent then break end
-        if not aliveChar() then
-            task.wait(1)
-        else
-            local ax = getAxe()
-            if not ax or not aliveChar() then
-                task.wait(1)
-            else
-                local sc = treeStandCF(tree)
-                local glue = RunService.Heartbeat:Connect(function()
-                    local _, _, r = aliveChar()
-                    if r then r.CFrame = sc end
-                end)
-                task.wait(0.25)
-                local chopStart = tick()
-                local last = 0
-                while not newLog and not _G.AbortAction and tick() - chopStart < 3 do
-                    local c = aliveChar()
-                    local a = c and findEndTimesAxe(c)
-                    if not a then break end
-                    if tick() - last >= stats.SwingCooldown then
-                        ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-                            tool = a, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
-                            hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-                        })
-                        last = tick()
-                    end
-                    task.wait()
-                end
-                glue:Disconnect()
-                if not newLog and not _G.AbortAction and tick() - chopStart >= 3 and aliveChar() then
-                    runSafeSuicide()
-                    task.wait(6)
-                end
-            end
-        end
-    end
-    con:Disconnect()
-
-    if not newLog then
-        local _, _, r = aliveChar()
-        if r then r.CFrame = curpos end
-        notify("Lonecave", _G.AbortAction and "Aborted" or "Stopped", 2)
-        return
-    end
-
-    task.wait(0.2)
-    local waited = tick()
-    while not aliveChar() and tick() - waited < 10 do task.wait(0.2) end
-    local _, _, hrp = aliveChar()
-    if hrp and newLog.Parent then
-        local part = newLog:FindFirstChild("WoodSection") or newLog:FindFirstChildWhichIsA("BasePart")
-        if part then hrp.CFrame = part.CFrame + Vector3.new(0, 5, 0) end
-        task.wait(0.2)
-    end
-    for _ = 1, 60 do
-        if _G.AbortAction then break end
-        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
-        newLog:PivotTo(curpos)
-        task.wait()
-    end
-    local _, _, r2 = aliveChar()
-    if r2 then r2.CFrame = curpos end
-    notify("Lonecave", "Lonecave brought", 3)
-end
-
 Tabs.Home:AddButton({Title = "Load RTX Graphics", Callback = function()
     loadstring(game:HttpGet("https://pastebin.com/raw/kH90gD5d"))()
 end})
@@ -787,10 +521,7 @@ Tabs.Home:AddButton({Title = "Copy Server Link", Callback = function()
     notify("Copied", "Server link copied")
 end})
 Tabs.Home:AddButton({Title = "Bring All Loose Wood", Callback = bringAllLoose})
-Tabs.Home:AddButton({Title = "Sell Everything", Callback = function()
-    sellEverything()
-    notify("Selling", "Selling everything...")
-end})
+Tabs.Home:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
 Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
     _G.MasterActive = false
     _G.AbortAction = true
@@ -805,8 +536,8 @@ Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
     flyMover.stop()
     vehMover.stop()
     disconnectAll()
-    dc(draggerConn) dc(autoRejoinConn)
-    draggerConn, autoRejoinConn = nil, nil
+    dc(draggerConn) dc(autoRejoinConn) dc(ultraConn)
+    draggerConn, autoRejoinConn, ultraConn = nil, nil, nil
     ClearPlayerESP()
     ClearItemESP()
     local og = LocalPlayer.PlayerGui:FindFirstChild("GreenHubOnScreen")
@@ -847,7 +578,7 @@ Tabs.Home:AddToggle("ViewLonecave", {
     end,
 })
 
-local woodNames = {"Lonecave","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
+local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
 local woodMap = {
     Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut",
     Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost",
@@ -856,20 +587,10 @@ local woodMap = {
 }
 local selectedWood = "Generic"
 local woodAmount = 1
-local lonecaveMethod = "Safe Suicide"
 
 Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
     _G.AbortAction = false
     task.spawn(function()
-        if selectedWood == "Lonecave" then
-            if lonecaveMethod == "Safe Suicide" then
-                bringLonecaveSuicide()
-            else
-                bringLonecave()
-            end
-            return
-        end
-        if woodAmount < 1 then notify("Wood", "Set amount above 0", 2) return end
         for _ = 1, woodAmount do
             if _G.AbortAction then break end
             bringWood(woodMap[selectedWood])
@@ -881,23 +602,15 @@ Tabs.Wood:AddButton({Title = "Abort", Callback = function()
     notify("Wood", "Aborting...", 2)
 end})
 Tabs.Wood:AddDropdown("WoodPick", {
-    Title = "Wood Type", Values = woodNames, Multi = false, Default = 2,
+    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
     Callback = function(v) selectedWood = v end,
 })
 Tabs.Wood:AddSlider("WoodAmount", {
     Title = "Amount", Default = 1, Min = 1, Max = 30, Rounding = 0,
     Callback = function(v) woodAmount = v end,
 })
-Tabs.Wood:AddDropdown("LonecaveMethod", {
-    Title = "Lonecave Method", Multi = false, Default = 2,
-    Values = {"Teleport Pickup", "Safe Suicide"},
-    Callback = function(v) lonecaveMethod = v end,
-})
 Tabs.Wood:AddButton({Title = "Bring All Wood", Callback = bringAllLoose})
-Tabs.Wood:AddButton({Title = "Sell Everything", Callback = function()
-    sellEverything()
-    notify("Selling", "Selling...")
-end})
+Tabs.Wood:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
 
 local SelectMode = false
 local selectedItems = {}
@@ -1216,9 +929,16 @@ local PlayerDrop = Tabs.Teleport:AddDropdown("PlayerTarget", {
 
 local function refreshPlayers()
     PlayerDrop:SetValues(getPlayerNames())
-    UpdatePlayerESP()
+    if _G.ESPToggled then UpdatePlayerESP() end
 end
-track(Players.PlayerAdded:Connect(function() task.wait(0.5) refreshPlayers() end))
+track(Players.PlayerAdded:Connect(function(p)
+    task.wait(0.5)
+    refreshPlayers()
+    track(p.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if _G.ESPToggled then UpdatePlayerESP() end
+    end))
+end))
 track(Players.PlayerRemoving:Connect(function() task.wait(0.1) refreshPlayers() end))
 
 local function selectedPlayer()
@@ -1591,7 +1311,10 @@ local function changeWater(property, value)
     end)
 end
 
+local bridgeIsDown = false
 local function bridgeDown(down)
+    if down == bridgeIsDown then return end
+    bridgeIsDown = down
     pcall(function()
         for _, part in ipairs(workspace.Bridge.VerticalLiftBridge.Lift:GetChildren()) do
             part.Position = part.Position + Vector3.new(0, down and -26 or 26, 0)
@@ -1642,7 +1365,7 @@ Tabs.World:AddToggle("ExtraSupports", {
             pcall(function()
                 loadstring(game:HttpGet("https://pastebin.com/raw/tASirLbL"))()
             end)
-        elseif not s then
+        elseif not s and extraSupportsLoaded then
             notify("Extra Supports", "Rejoin to fully remove supports", 4)
         end
     end,
@@ -1674,6 +1397,7 @@ end
 
 local function setHardDragger(on)
     if on then
+        if draggerConn then return end
         draggerConn = workspace.ChildAdded:Connect(function(obj)
             if obj.Name == "Dragger" then
                 local BG = obj:WaitForChild("BodyGyro", 2)
@@ -1711,17 +1435,6 @@ local function safeSuicideTeleport()
     if char then char:PivotTo(CFrame.new(3392, -397, -3389)) end
 end
 
-Tabs.Player:AddButton({Title = "Long Wire", Callback = longWire})
-Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicideTeleport})
-Tabs.Player:AddButton({Title = "Reset Character", Callback = function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Health = 0 end
-end})
-Tabs.Player:AddButton({Title = "Sit Down", Callback = function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Sit = true end
-end})
-
 Tabs.Player:AddSlider("WalkSpeed", {
     Title = "WalkSpeed", Default = 16, Min = 16, Max = 400, Rounding = 0,
     Callback = function(v) _G.WalkSpeed = v end,
@@ -1752,6 +1465,17 @@ Tabs.Player:AddToggle("InfJumpToggle", {Title = "Inf Jump", Default = false, Cal
 Tabs.Player:AddToggle("FullBright", {Title = "Fullbright", Default = false, Callback = function(s) setFullbright(s) end})
 Tabs.Player:AddToggle("AntiAFK", {Title = "Anti AFK", Default = true, Callback = function(s) _G.AntiAFK = s end})
 Tabs.Player:AddToggle("HardDragger", {Title = "Hard Dragger", Default = false, Callback = setHardDragger})
+
+Tabs.Player:AddButton({Title = "Long Wire", Callback = longWire})
+Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicideTeleport})
+Tabs.Player:AddButton({Title = "Reset Character", Callback = function()
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = 0 end
+end})
+Tabs.Player:AddButton({Title = "Sit Down", Callback = function()
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Sit = true end
+end})
 
 local onScreenGui = Instance.new("ScreenGui")
 onScreenGui.Name = "GreenHubOnScreen"
@@ -1835,7 +1559,7 @@ local function createOnScreenButton(item, index)
     btn.TextSize = 14
     btn.Text = item.Label .. ": Off"
     btn.Parent = onScreenGui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
     local stroke = Instance.new("UIStroke", btn)
     stroke.Color = item.Color
     stroke.Thickness = 2
@@ -1880,7 +1604,10 @@ end)
 
 Tabs.Visuals:AddToggle("PlayerESP", {
     Title = "Player ESP", Default = false,
-    Callback = function(s) _G.ESPToggled = s if not s then ClearPlayerESP() end end,
+    Callback = function(s)
+        _G.ESPToggled = s
+        if s then UpdatePlayerESP() else ClearPlayerESP() end
+    end,
 })
 Tabs.Visuals:AddToggle("ItemESP", {
     Title = "Item ESP", Default = false,
@@ -1904,14 +1631,129 @@ Tabs.Visuals:AddButton({Title = "Restore Lighting", Callback = function()
     Lighting.Ambient = Color3.fromRGB(70, 70, 70)
 end})
 
+local autoChopOn = false
+local CHOP_RANGE = 80
+local MAX_AT_ONCE = 5
+local CHOP_TREE_KIND = "All"
+local choppingNow = {}
+local chopFailed = {}
+local activeCount = 0
+local chopLoopId = 0
+
+local function treeFree(t)
+    local o = t:FindFirstChild("Owner")
+    return not o or o.Value == nil or o.Value == LocalPlayer
+end
+
+local function nearbyTrees(count)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+    local list = {}
+    for _, region in ipairs(workspace:GetChildren()) do
+        if region.Name == "TreeRegion" then
+            for _, t in ipairs(region:GetChildren()) do
+                if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass")
+                    and t.TreeClass.Value ~= "LoneCave" and not choppingNow[t]
+                    and (chopFailed[t] or 0) < tick()
+                    and treeFree(t)
+                    and (CHOP_TREE_KIND == "All" or t.TreeClass.Value == CHOP_TREE_KIND) then
+                    local d = (t:GetPivot().Position - hrp.Position).Magnitude
+                    if d <= CHOP_RANGE then table.insert(list, {tree = t, dist = d}) end
+                end
+            end
+        end
+    end
+    table.sort(list, function(a, b) return a.dist < b.dist end)
+    local out = {}
+    for i = 1, math.min(count, #list) do out[i] = list[i].tree end
+    return out
+end
+
+local function chopTree(tree, loopId)
+    local gotAnyLog = false
+    pcall(function()
+        local clas = tree.TreeClass.Value
+        local lastLog = tick()
+        local startTime = tick()
+        local gotLog = false
+        local logConn = workspace.LogModels.ChildAdded:Connect(function(l)
+            local o = l:FindFirstChild("Owner")
+            if o and o.Value == LocalPlayer then
+                lastLog = tick()
+                gotLog = true
+                gotAnyLog = true
+            end
+        end)
+        while autoChopOn and chopLoopId == loopId and _G.MasterActive do
+            if not tree.Parent or not tree:FindFirstChild("CutEvent") then break end
+            local ax = getEquippedOrBackpackAxe()
+            if not ax then
+                task.wait(0.5)
+            else
+                local stats = getAxStats(ax.ToolName.Value, clas)
+                if not stats then
+                    task.wait(0.5)
+                else
+                    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+                        tool = ax, height = 0.3, faceVector = Vector3.new(1, 0, 0), sectionId = 1,
+                        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+                    })
+                    task.wait(stats.SwingCooldown)
+                end
+            end
+            if gotLog and tick() - lastLog > 10 then break end
+            if tick() - startTime > 90 then break end
+        end
+        logConn:Disconnect()
+    end)
+    if not gotAnyLog and tree.Parent and tree:FindFirstChild("CutEvent") then
+        chopFailed[tree] = tick() + 5
+    else
+        chopFailed[tree] = nil
+    end
+    choppingNow[tree] = nil
+    activeCount -= 1
+end
+
+Tabs.AutoChop:AddDropdown("AutoChopTree", {
+    Title = "Tree Kind",
+    Values = {"All","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"},
+    Multi = false, Default = 1,
+    Callback = function(v) CHOP_TREE_KIND = v end,
+})
+Tabs.AutoChop:AddToggle("AutoChopToggle", {
+    Title = "Auto Chop", Default = false,
+    Callback = function(s)
+        autoChopOn = s
+        chopLoopId += 1
+        if not s then return end
+        local loopId = chopLoopId
+        task.spawn(function()
+            while autoChopOn and chopLoopId == loopId and _G.MasterActive do
+                if activeCount < MAX_AT_ONCE and getEquippedOrBackpackAxe() then
+                    local slots = MAX_AT_ONCE - activeCount
+                    for _, tree in ipairs(nearbyTrees(slots)) do
+                        if not choppingNow[tree] then
+                            choppingNow[tree] = true
+                            activeCount += 1
+                            task.spawn(chopTree, tree, loopId)
+                        end
+                    end
+                end
+                task.wait(0.3)
+            end
+        end)
+    end,
+})
+
 Tabs.Automation:AddToggle("AutoSell", {
     Title = "Auto Sell", Default = false,
     Callback = function(state)
         if state then
             task.spawn(function()
                 while Options.AutoSell.Value and _G.MasterActive do
-                    sellEverything()
-                    task.wait(3)
+                    sellEverything(true)
+                    task.wait(0.3)
                 end
             end)
         end
@@ -2005,7 +1847,7 @@ Tabs.Farm:AddToggle("AutoFarm", {
                     end
                     hrp.CFrame = curpos
                     farmStatus:SetDesc("Selling")
-                    sellEverything()
+                    sellEverything(true)
                     task.wait(2)
                     farmStatus:SetDesc("Farming " .. autoFarmWoodType)
                 end)
@@ -2092,53 +1934,38 @@ Tabs.Misc:AddButton({Title = "Print All Remotes", Callback = function()
     end
     notify("Misc", "Remotes printed to console")
 end})
-
-local SELL_POS = CFrame.new(315, 3, 85)
-Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = function()
-    _G.AbortAction = false
-    task.spawn(function()
-        local count, failed = 0, 0
-        local startCF = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        startCF = startCF and startCF.CFrame
-        for _, Log in ipairs(workspace.LogModels:GetChildren()) do
-            if _G.AbortAction then break end
-            if Log.Name:sub(1, 6) == "Loose_" and Log:FindFirstChild("Owner") and Log.Owner.Value == LocalPlayer then
-                local ok = pcall(function()
-                    local hrp = LocalPlayer.Character.HumanoidRootPart
-                    if Log:FindFirstChild("WoodSection") then
-                        hrp.CFrame = Log.WoodSection.CFrame + Vector3.new(0, 3, 0)
-                        task.wait(0.2)
-                    end
-                    dragTo(Log, SELL_POS)
-                end)
-                if ok then count += 1 else failed += 1 end
-            end
-        end
-        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and startCF then hrp.CFrame = startCF end
-        notify("Sell All", "Sent " .. count .. " logs" .. (failed > 0 and (", " .. failed .. " failed") or ""), 3)
-    end)
-end})
+Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = function() sellEverything(false) end})
 
 Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function()
     notify("Dupe", "Axe dupe is patched", 3)
 end})
 
-local hubCache
 local function getHub()
-    if hubCache and hubCache.Parent then return hubCache end
+    if Fluent.GUI and Fluent.GUI.Parent then return Fluent.GUI end
     for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
         for _, gui in ipairs(parent:GetChildren()) do
             if gui:IsA("ScreenGui") then
                 for _, d in ipairs(gui:GetDescendants()) do
-                    if d:IsA("TextLabel") and d.Text:find("Green Hub") then
-                        hubCache = gui
+                    if d:IsA("TextLabel") and d.Text == "Green Hub" then
                         return gui
                     end
                 end
             end
         end
     end
+end
+
+local function hubRoot()
+    if Window.Root and Window.Root.Parent then return Window.Root end
+    local hub = getHub()
+    if not hub then return end
+    local root
+    for _, c in ipairs(hub:GetChildren()) do
+        if c:IsA("GuiObject") and (not root or c.AbsoluteSize.X > root.AbsoluteSize.X) then
+            root = c
+        end
+    end
+    return root
 end
 
 local controlsSetup = false
@@ -2158,93 +1985,9 @@ local function setupControls(root)
     end))
 end
 
-local function styleHub()
-    local hub = getHub()
-    if not hub then return end
-
-    local function round(obj, radius)
-        if obj:IsA("GuiObject") and not obj:FindFirstChildOfClass("UICorner") then
-            Instance.new("UICorner", obj).CornerRadius = UDim.new(0, radius)
-        end
-    end
-
-    for _, d in ipairs(hub:GetDescendants()) do
-        if d:IsA("Frame") then
-            if d.AbsoluteSize.X > 400 then
-                if _G.ForceBlack then d.BackgroundColor3 = Color3.new(0, 0, 0) end
-                d.BackgroundTransparency = _G.HubTransparent and 0.5 or 0
-                round(d, 6)
-            elseif d.BackgroundTransparency < 1 then
-                round(d, 6)
-            end
-        elseif d:IsA("TextButton") then
-            d.BackgroundTransparency = 1
-            round(d, 6)
-        end
-    end
-
-    local root
-    for _, c in ipairs(hub:GetChildren()) do
-        if c:IsA("GuiObject") and (not root or c.AbsoluteSize.X > root.AbsoluteSize.X) then
-            root = c
-        end
-    end
-    if root then
-        round(root, 6)
-        root.ClipsDescendants = true
-        setupControls(root)
-    end
-end
-
-local function filterRows(q)
-    local hub = getHub()
-    if not hub then return end
-    q = string.lower(q)
-    for _, page in ipairs(hub:GetDescendants()) do
-        if page:IsA("ScrollingFrame") then
-            for _, row in ipairs(page:GetChildren()) do
-                if row:IsA("GuiObject") then
-                    local hasInput = row:FindFirstChildWhichIsA("TextBox", true) ~= nil
-                    local text = ""
-                    for _, t in ipairs(row:GetDescendants()) do
-                        if (t:IsA("TextLabel") or t:IsA("TextButton")) and t.Text ~= "" then
-                            text = text .. " " .. t.Text
-                        end
-                    end
-                    if q == "" or hasInput or text == "" then
-                        row.Visible = true
-                    else
-                        row.Visible = string.find(string.lower(text), q, 1, true) ~= nil
-                    end
-                end
-            end
-        end
-    end
-end
-
-local searchHooked = false
-local function hookSearch()
-    if searchHooked then return end
-    local hub = getHub()
-    if not hub then return end
-    for _, d in ipairs(hub:GetDescendants()) do
-        if d:IsA("TextBox") and string.find(string.lower(d.PlaceholderText), "search") then
-            searchHooked = true
-            track(d:GetPropertyChangedSignal("Text"):Connect(function()
-                filterRows(d.Text)
-            end))
-            return
-        end
-    end
-end
-
 task.spawn(function()
     task.wait(1)
-    while _G.MasterActive do
-        pcall(styleHub)
-        pcall(hookSearch)
-        task.wait(1)
-    end
+    pcall(function() setupControls(hubRoot()) end)
 end)
 
 local ToggleGui = Instance.new("ScreenGui")
@@ -2261,25 +2004,43 @@ ToggleBtn.TextColor3 = Color3.fromRGB(0, 255, 0)
 ToggleBtn.Text = "Open/Close"
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.TextSize = 14
+ToggleBtn.AutoButtonColor = false
 ToggleBtn.Parent = ToggleGui
-
-local ToggleCorner = Instance.new("UICorner", ToggleBtn)
-ToggleCorner.CornerRadius = UDim.new(0, 9)
-
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
 local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
 ToggleStroke.Color = Color3.fromRGB(0, 255, 0)
 ToggleStroke.Thickness = 2
 ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-local hubOpen = true
-ToggleBtn.MouseButton1Click:Connect(function()
-    hubOpen = not hubOpen
+local function toggleHub()
     local ok = pcall(function() Window:Minimize() end)
     if not ok then
         local hub = getHub()
-        if hub then hub.Enabled = hubOpen end
+        if hub then hub.Enabled = not hub.Enabled end
+    end
+end
+
+local movable = false
+local dragging, dragStart, startPos, moved = false, nil, nil, false
+ToggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging, moved = true, false
+        dragStart, startPos = input.Position, ToggleBtn.Position
     end
 end)
+track(UIS.InputChanged:Connect(function(input)
+    if dragging and movable and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local d = input.Position - dragStart
+        if d.Magnitude > 4 then moved = true end
+        ToggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+    end
+end))
+track(UIS.InputEnded:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        dragging = false
+        if not moved then toggleHub() end
+    end
+end))
 
 local togglePositions = {
     ["Center Left"]  = {Vector2.new(0, 0.5), UDim2.new(0, 20, 0.5, 0)},
@@ -2292,25 +2053,16 @@ local togglePositions = {
 
 Tabs.Settings:AddToggle("Transparent", {
     Title = "Transparent", Default = false,
-    Callback = function(s) _G.HubTransparent = s end,
-})
-Tabs.Settings:AddDropdown("Theme", {
-    Title = "Theme", Multi = false, Default = 1,
-    Values = {"Amoled","Dark","Darker","Light","Aqua","Amethyst","Rose"},
-    Callback = function(v)
-        _G.ForceBlack = (v == "Amoled")
-        pcall(function() Fluent:SetTheme(v) end)
-        if not _G.ForceBlack then
-            local hub = getHub()
-            if hub then
-                for _, d in ipairs(hub:GetDescendants()) do
-                    if d:IsA("Frame") and d.AbsoluteSize.X > 400 then
-                        d.BackgroundColor3 = Fluent.Theme and Fluent.Theme.AcrylicMain or d.BackgroundColor3
-                    end
-                end
-            end
-        end
+    Callback = function(s)
+        pcall(function()
+            local r = hubRoot()
+            if r then r.BackgroundTransparency = s and 0.5 or 0 end
+        end)
     end,
+})
+Tabs.Settings:AddToggle("MovableBtn", {
+    Title = "Movable Open/Close Button", Default = false,
+    Callback = function(s) movable = s end,
 })
 Tabs.Settings:AddDropdown("TogglePos", {
     Title = "Open/Close Position", Multi = false, Default = 1,
@@ -2324,6 +2076,516 @@ Tabs.Settings:AddDropdown("TogglePos", {
     end,
 })
 Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
+
+local function roundOne(d)
+    if not d:IsA("GuiObject") then return end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c then
+        c = Instance.new("UICorner")
+        c.Parent = d
+    end
+    if c.CornerRadius.Scale >= 0.5 then return end
+    if c.CornerRadius.Offset < 14 then
+        c.CornerRadius = UDim.new(0, 14)
+    end
+end
+
+local paintSaved = setmetatable({}, {__mode = "k"})
+local paintMode = "none"
+local outlineColor = Color3.fromRGB(0, 255, 0)
+local GREEN = Color3.fromRGB(0, 255, 0)
+local toggleColor = Color3.fromRGB(170, 255, 50)
+local blackActive = false
+local blackSaved = setmetatable({}, {__mode = "k"})
+
+local function isToggleTrack(d)
+    if not d:IsA("Frame") then return false end
+    if not d.ClipsDescendants then return false end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c or c.CornerRadius.Scale < 0.5 then return false end
+    local sy = d.AbsoluteSize.Y
+    return sy >= 16 and sy <= 36
+end
+
+local function paintBlackOne(d)
+    if not blackActive then return end
+    if not d:IsA("GuiObject") then return end
+    if d.BackgroundTransparency >= 1 then return end
+    if not blackSaved[d] then blackSaved[d] = d.BackgroundColor3 end
+    if isToggleTrack(d) then
+        d.BackgroundColor3 = toggleColor
+    else
+        d.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    end
+end
+
+local function setBlack(on)
+    blackActive = on
+    if not on then
+        for d, c in pairs(blackSaved) do
+            pcall(function() if d and d.Parent then d.BackgroundColor3 = c end end)
+        end
+        table.clear(blackSaved)
+        return
+    end
+    local hub = getHub()
+    if not hub then return end
+    if Window.Root then
+        pcall(function()
+            if not blackSaved[Window.Root] then blackSaved[Window.Root] = Window.Root.BackgroundColor3 end
+            Window.Root.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        end)
+    end
+    for _, d in ipairs(hub:GetDescendants()) do
+        paintBlackOne(d)
+    end
+end
+
+local function setPaint(mode, quiet)
+    local hub = getHub()
+    if not hub then
+        if not quiet then notify("Paint", "Hub not found", 2) end
+        return
+    end
+    for _, d in ipairs(hub:GetDescendants()) do
+        if not paintSaved[d] then
+            paintSaved[d] = {
+                stroke = d:IsA("UIStroke") and d.Color or nil,
+                bg = d:IsA("GuiObject") and d.BackgroundColor3 or nil,
+                text = (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and d.TextColor3 or nil,
+            }
+        end
+        local o = paintSaved[d]
+        if d:IsA("UIStroke") then
+            if mode == "outline" or mode == "full" then
+                d.Color = outlineColor
+            else
+                d.Color = o.stroke
+            end
+        elseif d:IsA("GuiObject") and o.bg then
+            if d.BackgroundTransparency < 1 then
+                if mode == "full" then
+                    d.BackgroundColor3 = GREEN
+                else
+                    d.BackgroundColor3 = o.bg
+                end
+            end
+        end
+        if o.text then
+            if mode == "full" then
+                d.TextColor3 = Color3.new(0, 0, 0)
+            else
+                d.TextColor3 = o.text
+            end
+        end
+    end
+end
+
+local function applyPaint(mode)
+    paintMode = mode
+    setPaint(mode)
+end
+
+if Fluent.GUI then
+    track(Fluent.GUI.DescendantAdded:Connect(function(d)
+        task.defer(function()
+            if not d.Parent then return end
+            roundOne(d)
+            paintBlackOne(d)
+        end)
+    end))
+end
+
+task.spawn(function()
+    task.wait(2)
+    if Fluent.GUI then
+        for _, d in ipairs(Fluent.GUI:GetDescendants()) do
+            roundOne(d)
+        end
+    end
+    if blackActive then setBlack(true) end
+end)
+
+local ultraOn = false
+local ultraSaved = {}
+
+local function setProp(inst, prop, value)
+    if not ultraSaved[inst] then ultraSaved[inst] = {} end
+    if ultraSaved[inst][prop] == nil then
+        ultraSaved[inst][prop] = inst[prop]
+    end
+    pcall(function() inst[prop] = value end)
+end
+
+local function restoreUltra()
+    for inst, props in pairs(ultraSaved) do
+        for prop, value in pairs(props) do
+            pcall(function() inst[prop] = value end)
+        end
+    end
+    table.clear(ultraSaved)
+end
+
+local function neonPart(part)
+    local char = LocalPlayer.Character
+    if char and part:IsDescendantOf(char) then return end
+    setProp(part, "Material", Enum.Material.Neon)
+    setProp(part, "Color", GREEN)
+end
+
+local function applyGameUI()
+    local hub = getHub()
+    for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui ~= hub and not gui.Name:find("GreenHub") then
+            for _, d in ipairs(gui:GetDescendants()) do
+                if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+                    setProp(d, "TextColor3", GREEN)
+                elseif d:IsA("ImageLabel") or d:IsA("ImageButton") then
+                    setProp(d, "ImageColor3", GREEN)
+                elseif d:IsA("Frame") and d.BackgroundTransparency < 1 then
+                    setProp(d, "BackgroundColor3", GREEN)
+                end
+            end
+        end
+    end
+end
+
+local function applyUltra(on)
+    ultraOn = on
+    if on then
+        applyGameUI()
+        for _, d in ipairs(workspace:GetDescendants()) do
+            if d:IsA("BasePart") then neonPart(d) end
+        end
+        dc(ultraConn)
+        ultraConn = workspace.DescendantAdded:Connect(function(d)
+            if ultraOn and d:IsA("BasePart") then neonPart(d) end
+        end)
+    else
+        dc(ultraConn)
+        ultraConn = nil
+        restoreUltra()
+    end
+end
+
+Tabs.Settings:AddColorpicker("OutlineColor", {
+    Title = "Outline Color", Default = outlineColor,
+    Callback = function(v)
+        outlineColor = v
+        if paintMode == "outline" or paintMode == "full" then pcall(setPaint, paintMode, true) end
+    end,
+})
+
+Tabs.Settings:AddColorpicker("ToggleColor", {
+    Title = "Toggle Color", Default = toggleColor,
+    Callback = function(v)
+        toggleColor = v
+        if blackActive then
+            for d in pairs(blackSaved) do
+                if d and d.Parent and isToggleTrack(d) then
+                    d.BackgroundColor3 = toggleColor
+                end
+            end
+        end
+    end,
+})
+
+Tabs.Settings:AddToggle("BlackTheme", {
+    Title = "Dark Theme", Default = true,
+    Callback = function(s)
+        if s then
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+            if ultraOn then applyUltra(false) end
+            if paintMode == "full" or paintMode == "outline" then applyPaint("none") end
+            setBlack(true)
+        else
+            setBlack(false)
+        end
+    end,
+})
+
+Tabs.Settings:AddToggle("GreenOutline", {
+    Title = "Green Green Hub", Default = false,
+    Callback = function(s)
+        if s then
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+            if ultraOn then applyUltra(false) end
+            applyPaint("outline")
+        elseif paintMode == "outline" then
+            applyPaint("none")
+        end
+    end,
+})
+Tabs.Settings:AddToggle("GreenFull", {
+    Title = "Green Green Green Hub", Default = false,
+    Callback = function(s)
+        if s then
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+            if ultraOn then applyUltra(false) end
+            applyPaint("full")
+        elseif paintMode == "full" and not ultraOn then
+            applyPaint("none")
+        end
+    end,
+})
+Tabs.Settings:AddToggle("GreenUltra", {
+    Title = "Green Green Green Green Hub", Default = false,
+    Callback = function(s)
+        if s then
+            if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+            if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+            if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+            applyPaint("full")
+            applyUltra(true)
+        elseif ultraOn then
+            applyUltra(false)
+            if paintMode == "full" then applyPaint("none") end
+        end
+    end,
+})
+
+local CFG_DIR = "GreenHub"
+local CFG_SUB = "GreenHub/configs"
+local CFG_AUTO = "GreenHub/autosave.json"
+local CFG_META = "GreenHub/meta.json"
+local fsOk = type(writefile) == "function" and type(readfile) == "function"
+    and type(isfile) == "function" and type(isfolder) == "function"
+    and type(makefolder) == "function" and type(listfiles) == "function"
+local CFG_SKIP = {ConfigName = true, ConfigList = true, AutoSaveCfg = true}
+local loadingCfg = false
+local cfgReady = false
+local cfgDefaults = {}
+
+if fsOk then
+    pcall(function()
+        if not isfolder(CFG_DIR) then makefolder(CFG_DIR) end
+        if not isfolder(CFG_SUB) then makefolder(CFG_SUB) end
+    end)
+end
+
+local function writeJson(path, data)
+    if not fsOk then return false end
+    local ok = pcall(function() writefile(path, HttpService:JSONEncode(data)) end)
+    return ok
+end
+
+local function readJson(path)
+    if not fsOk then return nil end
+    local ok, res = pcall(function()
+        if not isfile(path) then return nil end
+        return HttpService:JSONDecode(readfile(path))
+    end)
+    if ok then return res end
+end
+
+local meta = readJson(CFG_META) or {}
+if meta.autosave == nil then meta.autosave = true end
+if type(meta.autoload) ~= "string" then meta.autoload = "" end
+
+local function encodeValue(v)
+    if typeof(v) == "Color3" then
+        return {__c3 = true, r = v.R, g = v.G, b = v.B}
+    end
+    return v
+end
+
+local function collectConfig()
+    local t = {}
+    for name, opt in pairs(Options) do
+        if not CFG_SKIP[name] and type(opt) == "table" and opt.Value ~= nil then
+            t[name] = encodeValue(opt.Value)
+        end
+    end
+    return t
+end
+
+local function snapshot()
+    local t = collectConfig()
+    local names = {}
+    for n in pairs(t) do names[#names + 1] = n end
+    table.sort(names)
+    local parts = {}
+    for _, n in ipairs(names) do
+        local v = t[n]
+        parts[#parts + 1] = n .. "=" .. (type(v) == "table" and HttpService:JSONEncode(v) or tostring(v))
+    end
+    return table.concat(parts, "|"), t
+end
+
+local function applyConfig(t)
+    loadingCfg = true
+    local names = {}
+    for name in pairs(t) do table.insert(names, name) end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local opt = Options[name]
+        local v = t[name]
+        if opt and not CFG_SKIP[name] then
+            pcall(function()
+                if type(v) == "table" and v.__c3 then
+                    local c = Color3.new(v.r, v.g, v.b)
+                    if opt.SetValueRGB then opt:SetValueRGB(c) else opt:SetValue(c) end
+                elseif type(v) == "table" or opt.Value ~= v then
+                    opt:SetValue(v)
+                end
+            end)
+        end
+    end
+    loadingCfg = false
+end
+
+local function listConfigs()
+    local out = {}
+    if not fsOk then return out end
+    pcall(function()
+        for _, path in ipairs(listfiles(CFG_SUB)) do
+            local n = tostring(path):match("([^/\\]+)%.json$")
+            if n then table.insert(out, n) end
+        end
+    end)
+    table.sort(out)
+    return out
+end
+
+local function cleanName(s)
+    s = tostring(s or ""):gsub("[^%w _%-]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return s
+end
+
+Tabs.Settings:AddSection("Config")
+
+local cfgStatus = Tabs.Settings:AddParagraph({
+    Title = "Auto Load Config",
+    Content = meta.autoload ~= "" and meta.autoload or "None",
+})
+
+Tabs.Settings:AddToggle("AutoSaveCfg", {
+    Title = "Auto Save Options", Default = meta.autosave,
+    Callback = function(s)
+        meta.autosave = s
+        writeJson(CFG_META, meta)
+    end,
+})
+
+Tabs.Settings:AddInput("ConfigName", {
+    Title = "Config Name", Default = "", Placeholder = "Type a name",
+    Numeric = false, Finished = false,
+    Callback = function() end,
+})
+
+local ConfigDrop = Tabs.Settings:AddDropdown("ConfigList", {
+    Title = "Saved Configs", Values = listConfigs(), Multi = false, Default = nil,
+    Callback = function() end,
+})
+
+local function refreshConfigs()
+    pcall(function() ConfigDrop:SetValues(listConfigs()) end)
+end
+
+local function selectedConfig()
+    local n = Options.ConfigList and Options.ConfigList.Value
+    if type(n) ~= "string" or n == "" then
+        notify("Config", "Select a config first", 2)
+        return nil
+    end
+    return n
+end
+
+Tabs.Settings:AddButton({Title = "Save Config", Callback = function()
+    local name = cleanName(Options.ConfigName.Value)
+    if name == "" then notify("Config", "Type a config name", 2) return end
+    if not fsOk then notify("Config", "File functions unavailable", 3) return end
+    if writeJson(CFG_SUB .. "/" .. name .. ".json", collectConfig()) then
+        refreshConfigs()
+        pcall(function() ConfigDrop:SetValue(name) end)
+        notify("Config", "Saved " .. name, 3)
+    else
+        notify("Config", "Save failed", 3)
+    end
+end})
+
+Tabs.Settings:AddButton({Title = "Load Selected Config", Callback = function()
+    local name = selectedConfig()
+    if not name then return end
+    local data = readJson(CFG_SUB .. "/" .. name .. ".json")
+    if data then
+        applyConfig(data)
+        notify("Config", "Loaded " .. name, 3)
+    else
+        notify("Config", "Could not read " .. name, 3)
+    end
+end})
+
+Tabs.Settings:AddButton({Title = "Set Selected As Auto Load", Callback = function()
+    local name = selectedConfig()
+    if not name then return end
+    meta.autoload = name
+    writeJson(CFG_META, meta)
+    cfgStatus:SetDesc(name)
+    notify("Config", name .. " will auto load", 3)
+end})
+
+Tabs.Settings:AddButton({Title = "Clear Auto Load", Callback = function()
+    meta.autoload = ""
+    writeJson(CFG_META, meta)
+    cfgStatus:SetDesc("None")
+    notify("Config", "Auto load cleared", 2)
+end})
+
+Tabs.Settings:AddButton({Title = "Delete Selected Config", Callback = function()
+    local name = selectedConfig()
+    if not name then return end
+    pcall(function() delfile(CFG_SUB .. "/" .. name .. ".json") end)
+    if meta.autoload == name then
+        meta.autoload = ""
+        writeJson(CFG_META, meta)
+        cfgStatus:SetDesc("None")
+    end
+    refreshConfigs()
+    notify("Config", "Deleted " .. name, 3)
+end})
+
+Tabs.Settings:AddButton({Title = "Refresh Config List", Callback = refreshConfigs})
+
+Tabs.Settings:AddButton({Title = "Reset All Settings To Default", Callback = function()
+    applyConfig(cfgDefaults)
+    notify("Config", "All settings reset", 3)
+end})
+
+cfgDefaults = collectConfig()
+
+local lastSnapshot = ""
+task.spawn(function()
+    while _G.MasterActive do
+        task.wait(3)
+        if meta.autosave and cfgReady and not loadingCfg and fsOk then
+            local ok, snap, t = pcall(snapshot)
+            if ok and snap ~= lastSnapshot then
+                lastSnapshot = snap
+                writeJson(CFG_AUTO, t)
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    task.wait(0.5)
+    local data
+    if meta.autoload ~= "" then
+        data = readJson(CFG_SUB .. "/" .. meta.autoload .. ".json")
+    end
+    if not data and meta.autosave then
+        data = readJson(CFG_AUTO)
+    end
+    if data then applyConfig(data) end
+    cfgReady = true
+end)
 
 Window:SelectTab(1)
 notify("Green Hub", "Loaded!", 4)
