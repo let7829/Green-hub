@@ -8,6 +8,8 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
+local TS = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
 
 if not game:IsLoaded() then repeat task.wait() until game:IsLoaded() end
 
@@ -64,10 +66,13 @@ local TeleportGunKey = Enum.KeyCode[saved.TeleportGunKey or "T"]
 local KeybindsEnabled = saved.KeybindsEnabled ~= false
 local AutoFarmEnabled = saved.AutoFarmEnabled == true
 local KillAuraRange = saved.KillAuraRange or 999
+local FarmWalkSpeed = saved.FarmWalkSpeed or 35
 
 local ToggleBtnPos = saved.ToggleBtnPos
 
 local roundActive = false
+local farmingActive = false
+local lastKnifeCheck = 0
 
 local collectedCoins = setmetatable({}, {__mode = "k"})
 
@@ -109,6 +114,7 @@ local function SaveAllSettings()
         KeybindsEnabled = KeybindsEnabled,
         AutoFarmEnabled = AutoFarmEnabled,
         KillAuraRange = KillAuraRange,
+        FarmWalkSpeed = FarmWalkSpeed,
         ToggleBtnPos = ToggleBtnPos and {X = ToggleBtnPos.X, Y = ToggleBtnPos.Y} or nil,
     })
 end
@@ -202,6 +208,14 @@ LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     ScanRoleLabel()
 end)
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        if ChamsESPEnabled then
+            task.wait(0.3)
+            pcall(ApplyChams, char, GetRoleColor(char))
+        end
+    end)
+end)
 
 local function GetMurdererV1()
     for _,v in pairs(Players:GetPlayers()) do
@@ -240,19 +254,25 @@ local function GetRoleColor(char)
 end
 
 local function ApplyChams(char,color)
-    if not char then return end
+    if not char or not char.Parent then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
     local existing = char:FindFirstChild("ChamsESP")
     if existing then
+        if existing.Adornee ~= char then existing.Adornee = char end
         existing.FillColor = color
         existing.OutlineColor = color
+        existing.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         return
     end
     local h = Instance.new("Highlight")
     h.Name = "ChamsESP"
-    h.FillTransparency = 0.75
-    h.OutlineTransparency = 0.25
+    h.FillTransparency = 0.6
+    h.OutlineTransparency = 0.1
     h.FillColor = color
     h.OutlineColor = color
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Adornee = char
     h.Parent = char
 end
 
@@ -338,7 +358,7 @@ local function getCoinEntities()
             local key = ancestor or obj
             if not seen[key] then
                 seen[key] = true
-                table.insert(entities, {model = ancestor, part = obj})
+                table.insert(entities, {model = ancestor, part = obj, key = key})
             end
         end
     end
@@ -356,22 +376,9 @@ workspace.DescendantRemoving:Connect(function(obj)
     end
 end)
 
-local function entityKey(entity)
-    return entity.model or entity.part
-end
-
-local function entityPosition(entity)
-    if entity.model then
-        local primary = entity.model.PrimaryPart or entity.model:FindFirstChildWhichIsA("BasePart")
-        if primary then return primary.Position end
-    end
-    return entity.part.Position
-end
-
 local function markCollected(entity)
-    local key = entityKey(entity)
-    if collectedCoins[key] then return end
-    collectedCoins[key] = true
+    if not entity.key then return end
+    collectedCoins[entity.key] = true
     local target = entity.model or entity.part
     if not target or not target.Parent then return end
     if target:FindFirstChild("CollectedCoin") then return end
@@ -387,23 +394,155 @@ end
 local function getNextUncollectedEntity()
     local entities = getCoinEntities()
     for _, entity in ipairs(entities) do
-        if not collectedCoins[entityKey(entity)] then
+        if not collectedCoins[entity.key] and entity.part and entity.part.Parent then
             return entity
         end
     end
     return nil
 end
 
-local function grabNextCoin()
+local function isAlive()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hum = char:FindFirstChild("Humanoid")
+    return hum and hum.Health > 0
+end
+
+local function equipKnife()
+    local now = tick()
+    if now - lastKnifeCheck < 2 then return end
+    lastKnifeCheck = now
+    local char = LocalPlayer.Character
+    if not char or char:FindFirstChild("Knife") then return end
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if not bp then return end
+    local knife = bp:FindFirstChild("Knife")
+    if knife then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function() hum:EquipTool(knife) end)
+        end
+    end
+end
+
+local function pathToPosition(targetPos)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    local entity = getNextUncollectedEntity()
-    if not entity then return false end
-    local pos = entityPosition(entity)
-    hrp.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-    markCollected(entity)
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return false end
+
+    farmingActive = true
+    hum.WalkSpeed = FarmWalkSpeed
+
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 2.5,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        AgentMaxSlope = 45,
+        WaypointSpacing = 4, -- Smaller spacing to hug walls and avoid obstacles
+    })
+
+    local isBlocked = false
+    local blockConn
+    blockConn = path.Blocked:Connect(function()
+        isBlocked = true
+    end)
+
+    local success, err = pcall(function()
+        path:ComputeAsync(hrp.Position, targetPos)
+    end)
+
+    if not success or path.Status ~= Enum.PathStatus.Success then
+        if blockConn then blockConn:Disconnect() end
+        farmingActive = false
+        return false
+    end
+
+    local waypoints = path:GetWaypoints()
+    if #waypoints < 2 then
+        if blockConn then blockConn:Disconnect() end
+        farmingActive = false
+        return false
+    end
+
+    for i = 2, #waypoints do
+        if not AutoFarmEnabled and not farmingActive then 
+            if blockConn then blockConn:Disconnect() end
+            farmingActive = false
+            return false 
+        end
+        if isBlocked then
+            if blockConn then blockConn:Disconnect() end
+            farmingActive = false
+            return false 
+        end
+
+        local wp = waypoints[i]
+        local c = LocalPlayer.Character
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if not h or h.Health <= 0 then
+            if blockConn then blockConn:Disconnect() end
+            farmingActive = false
+            return false
+        end
+
+        if wp.Action == Enum.PathWaypointAction.Jump then
+            h.Jump = true
+        end
+
+        h:MoveTo(wp.Position)
+
+        local timeout = tick() + 3
+        local lastPos = hrp.Position
+        local stuckCounter = 0
+
+        while tick() < timeout do
+            if not AutoFarmEnabled and not farmingActive then 
+                if blockConn then blockConn:Disconnect() end
+                farmingActive = false
+                return false 
+            end
+            if isBlocked then
+                if blockConn then blockConn:Disconnect() end
+                farmingActive = false
+                return false 
+            end
+            
+            local cc = LocalPlayer.Character
+            local rr = cc and cc:FindFirstChild("HumanoidRootPart")
+            if not rr then break end
+            
+            if (rr.Position - wp.Position).Magnitude < 3 then
+                break
+            end
+            
+            if (rr.Position - lastPos).Magnitude < 0.2 then
+                stuckCounter = stuckCounter + 1
+                if stuckCounter >= 3 then
+                    h.Jump = true
+                end
+            else
+                stuckCounter = 0
+            end
+            lastPos = rr.Position
+            
+            task.wait(0.05)
+        end
+    end
+
+    if blockConn then blockConn:Disconnect() end
+    farmingActive = false
     return true
+end
+
+local function walkToCoin(entity)
+    if not entity or not entity.part or not entity.part.Parent then return false end
+    local reached = pathToPosition(entity.part.Position)
+    if reached then
+        markCollected(entity)
+        return true
+    end
+    return false
 end
 
 local function actionTPMurder()
@@ -437,9 +576,18 @@ local function actionPickupGun()
     if not hrp then return end
     local originalCFrame = hrp.CFrame
     local target = gun:IsA("BasePart") and gun or gun:FindFirstChildWhichIsA("BasePart")
+    
     if target then
         hrp.CFrame = target.CFrame + Vector3.new(0,2,0)
-        task.wait(0.15)
+        
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                pcall(firetouchinterest, part, target, 0)
+                pcall(firetouchinterest, part, target, 1)
+            end
+        end
+        
+        task.wait(0.3)
         hrp.CFrame = originalCFrame
         notify("Grab Gun", "Attempted pickup", 2)
     end
@@ -527,46 +675,80 @@ local function actionKillAll()
 end
 
 local function actionShootMurder()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum then return end
+
     local localRole = RoleCache[LocalPlayer]
-    if not localRole then
-        local char = LocalPlayer.Character
-        if char and (char:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")) then
-            localRole = "Sheriff"
-        end
-    end
     if localRole ~= "Sheriff" then
-        local sheriff = GetSheriffV1()
-        if not sheriff or sheriff ~= LocalPlayer.Character then
-            notify("Shoot Murder", "You must be the sheriff", 2)
+        if not (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Revolver")) then
+            notify("Shoot Murder", "You must be the sheriff and have a gun!", 2)
             return
         end
     end
+
     local murderer = GetMurdererV1()
     if not murderer then
-        notify("Shoot Murder", "No murderer found", 2)
+        notify("Shoot Murder", "No murderer found!", 2)
         return
     end
-    local hasGun = false
-    local char = LocalPlayer.Character
-    if char then hasGun = char:FindFirstChild("Gun") ~= nil or LocalPlayer.Backpack:FindFirstChild("Gun") ~= nil end
-    if not hasGun then
+
+    local murdererHrp = murderer:FindFirstChild("HumanoidRootPart")
+    if not murdererHrp then return end
+
+    local gun = char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Revolver")
+    if not gun then
+        notify("Shoot Murder", "Grabbing gun...", 2)
         actionPickupGun()
         task.wait(1)
+        gun = char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Revolver")
+        if not gun then
+            notify("Shoot Murder", "Failed to grab gun.", 2)
+            return
+        end
     end
-    local hum = murderer:FindFirstChildWhichIsA("Humanoid")
-    if hum and hum.Health > 0 then
-        hum.Health = 0
-        notify("Shoot Murder", "Shot murderer", 2)
-    else
-        notify("Shoot Murder", "Failed", 2)
+
+    local originalCFrame = hrp.CFrame
+    hrp.CFrame = murdererHrp.CFrame * CFrame.new(0, 0, 6)
+    task.wait(0.1)
+
+    if gun.Parent == LocalPlayer.Backpack then
+        hum:EquipTool(gun)
+        task.wait(0.2)
     end
+
+    hrp.CFrame = CFrame.new(hrp.Position, murdererHrp.Position)
+    task.wait(0.1)
+
+    pcall(function()
+        if gun.Activate then
+            gun:Activate()
+        end
+        local fireRemote = gun:FindFirstChildWhichIsA("RemoteEvent") or gun:FindFirstChild("Fire")
+        if fireRemote then
+            fireRemote:FireServer()
+        end
+    end)
+
+    task.wait(0.5)
+    
+    if hrp and hrp.Parent then
+        hrp.CFrame = originalCFrame
+    end
+
+    notify("Shoot Murder", "Fired at murderer!", 2)
 end
 
 local function actionCoinGrab()
     local count = 0
-    while grabNextCoin() do
-        count = count + 1
-        task.wait(0.3)
+    while isAlive() do
+        local entity = getNextUncollectedEntity()
+        if not entity then break end
+        if walkToCoin(entity) then
+            count = count + 1
+        end
+        task.wait(0.2)
         if count > 50 then break end
     end
     if count > 0 then
@@ -612,8 +794,8 @@ end
 local Window = Fluent:CreateWindow({
     Title = "Green Hub",
     SubTitle = "MM2 | Murder Mystery 2",
-    TabWidth = 130,
-    Size = UDim2.fromOffset(740, 320),
+    TabWidth = 125,
+    Size = UDim2.fromOffset(700, 360),
     Acrylic = false,
     Theme = "Darker",
     MinimizeKey = HotkeyKey,
@@ -848,11 +1030,19 @@ end
 
 local function roundOne(d)
     if not d:IsA("GuiObject") then return end
-    if d:FindFirstChildOfClass("UICorner") then return end
     local sz = d.AbsoluteSize
-    if sz.X < 50 or sz.Y < 30 then return end
+    if sz.X < 40 or sz.Y < 24 then return end
+    if d:IsA("Frame") and d.ClipsDescendants and sz.Y < 36 then return end
+    local existing = d:FindFirstChildOfClass("UICorner")
+    if existing then
+        local r = existing.CornerRadius
+        if r.Scale < 0.5 and r.Offset < 12 then
+            existing.CornerRadius = UDim.new(0, 12)
+        end
+        return
+    end
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 10)
+    c.CornerRadius = UDim.new(0, 12)
     c.Parent = d
 end
 
@@ -941,7 +1131,6 @@ local function toggleMoveableBtn(state, name, action, color)
     end
 end
 
-local isAlive
 local flyConn, bodyVel, bodyGyr
 local function StartFly()
     if flyConn then return end
@@ -953,11 +1142,17 @@ local function StartFly()
     hum.PlatformStand = true
     bodyVel = Instance.new("BodyVelocity", hrp)
     bodyVel.Velocity = Vector3.zero
-    bodyVel.MaxForce = Vector3.new(1e5,1e5,1e5)
+    bodyVel.MaxForce = Vector3.new(1e6, 1e6, 1e6)
     bodyGyr = Instance.new("BodyGyro", hrp)
-    bodyGyr.MaxTorque = Vector3.new(1e5,1e5,1e5)
-    bodyGyr.D = 50
-    flyConn = RunService.Heartbeat:Connect(function()
+    bodyGyr.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+    bodyGyr.P = 5000
+    bodyGyr.D = 200
+    local smoothedVel = Vector3.zero
+    local controlsRef = nil
+    pcall(function()
+        controlsRef = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+    end)
+    flyConn = RunService.Heartbeat:Connect(function(dt)
         if not FlyEnabled then return end
         if not bodyVel or not bodyVel.Parent or not bodyGyr or not bodyGyr.Parent then
             StopFly()
@@ -969,39 +1164,40 @@ local function StartFly()
         if not hum then return end
 
         local md = hum.MoveDirection
-        if md.Magnitude < 0.1 then
-            local ok, controls = pcall(function()
-                return require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
-            end)
-            if ok and controls then
-                local ok2, mv = pcall(function() return controls:GetMoveVector() end)
-                if ok2 and mv and mv.Magnitude > 0.1 then
-                    md = mv
-                end
+        if md.Magnitude < 0.1 and controlsRef then
+            local ok2, mv = pcall(function() return controlsRef:GetMoveVector() end)
+            if ok2 and mv and mv.Magnitude > 0.1 then
+                md = mv
             end
         end
 
-        local velocity = Vector3.zero
+        local targetVel = Vector3.zero
         if md.Magnitude > 0.1 then
-            velocity = md.Unit * FlySpeedVal
-            local lookY = cam.CFrame.LookVector.Y
-            if math.abs(lookY) > 0.1 then
-                velocity = velocity + Vector3.new(0, lookY * FlySpeedVal, 0)
+            local camLook = cam.CFrame.LookVector
+            camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
+            local camRight = cam.CFrame.RightVector
+            camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            local dir = (camRight * md.X + camLook * (-md.Z))
+            if dir.Magnitude > 0.1 then
+                targetVel = dir.Unit * FlySpeedVal * md.Magnitude
             end
-            if velocity.Magnitude > FlySpeedVal then
-                velocity = velocity.Unit * FlySpeedVal
-            end
+            local pitch = md.Z * cam.CFrame.LookVector.Y * FlySpeedVal
+            targetVel = targetVel + Vector3.new(0, pitch, 0)
         end
 
         if UIS:IsKeyDown(Enum.KeyCode.Space) then
-            velocity = velocity + Vector3.new(0, FlySpeedVal, 0)
+            targetVel = targetVel + Vector3.new(0, FlySpeedVal, 0)
         end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
-            velocity = velocity - Vector3.new(0, FlySpeedVal, 0)
+            targetVel = targetVel - Vector3.new(0, FlySpeedVal, 0)
         end
 
-        bodyVel.Velocity = velocity
-        bodyGyr.CFrame = cam.CFrame
+        local alpha = math.clamp(dt * 12, 0, 1)
+        smoothedVel = smoothedVel:Lerp(targetVel, alpha)
+        if smoothedVel.Magnitude < 0.5 then smoothedVel = Vector3.zero end
+
+        bodyVel.Velocity = smoothedVel
+        bodyGyr.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
     end)
 end
 local function StopFly()
@@ -1014,13 +1210,6 @@ local function StopFly()
         local hum = char:FindFirstChild("Humanoid")
         if hum then hum.PlatformStand = false end
     end
-end
-
-isAlive = function()
-    local char = LocalPlayer.Character
-    if not char then return false end
-    local hum = char:FindFirstChild("Humanoid")
-    return hum and hum.Health > 0
 end
 
 local originalLighting = nil
@@ -1270,11 +1459,13 @@ local function aimbotFunction()
 end
 
 local function collectCoins()
-    for i = 1, 20 do
+    for i = 1, 15 do
         if not AutoFarmEnabled then return end
         if not isAlive() then return end
-        if not grabNextCoin() then return end
-        task.wait(0.4)
+        local entity = getNextUncollectedEntity()
+        if not entity then return end
+        if not walkToCoin(entity) then return end
+        task.wait(0.2)
     end
 end
 
@@ -1295,6 +1486,7 @@ local function autoFarmLoop()
             else localRole = "Innocent" end
         end
         if localRole == "Murderer" then
+            equipKnife()
             if not killAllActive then actionKillAll() end
         elseif localRole == "Sheriff" then
             local murderer = GetMurdererV1()
@@ -1685,6 +1877,16 @@ Tabs.Farm:AddButton({
     Callback = actionCoinGrab,
 })
 
+Tabs.Farm:AddSlider("FarmWalkSpeed", {
+    Title = "Farm WalkSpeed",
+    Description = "Speed while pathfinding",
+    Default = FarmWalkSpeed,
+    Min = 16,
+    Max = 45,
+    Rounding = 0,
+    Callback = function(v) FarmWalkSpeed = v; SaveAllSettings() end,
+})
+
 Tabs.Shortcuts:AddToggle("BtnTPMurderT", {
     Title = "TP Murder Button",
     Default = BtnTPMurder,
@@ -1901,7 +2103,9 @@ RunService.Heartbeat:Connect(function()
     if char then
         local hum = char:FindFirstChild("Humanoid")
         if hum then
-            hum.WalkSpeed = WalkSpeed
+            if not farmingActive then
+                hum.WalkSpeed = WalkSpeed
+            end
             hum.JumpPower = JumpPower
         end
     end
@@ -1926,11 +2130,11 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.4) do
+    while task.wait(0.15) do
         if not ChamsESPEnabled then continue end
         for _,player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
-                ApplyChams(player.Character, GetRoleColor(player.Character))
+                pcall(ApplyChams, player.Character, GetRoleColor(player.Character))
             end
         end
     end
