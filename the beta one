@@ -352,31 +352,165 @@ end)
 local function getAxStats(axName, treClas)
     local mod = ReplicatedStorage.AxeClasses:FindFirstChild("AxeClass_" .. axName)
     if not mod then return end
-    local s = require(mod).new()
+    local ok, s = pcall(function() return require(mod).new() end)
+    if not ok or not s then return end
     if s.SpecialTrees and s.SpecialTrees[treClas] then
         for k, v in next, s.SpecialTrees[treClas] do s[k] = v end
     end
     return s
 end
 
+local function ownsValue(v)
+    if v == nil then return false end
+    if v == LocalPlayer or v == LocalPlayer.UserId then return true end
+    if v == LocalPlayer.Character then return true end
+    return false
+end
+
+local function isMyLog(log)
+    if not log:IsA("Model") then return false end
+    local o = log:FindFirstChild("Owner")
+    if not o then return false end
+    return ownsValue(o.Value)
+end
+
+local function getWoodSections(log)
+    local s = {}
+    for _, c in ipairs(log:GetDescendants()) do
+        if c:IsA("BasePart") and c.Name == "WoodSection" then
+            s[#s + 1] = c
+        end
+    end
+    if #s == 0 then
+        local p = log:FindFirstChildWhichIsA("BasePart")
+        if p then s[1] = p end
+    end
+    return s
+end
+
+local function getModlMass(model)
+    local total, sections = 0, 0
+    for _, v in next, model:GetDescendants() do
+        if v:IsA("BasePart") and v.Name ~= "Leaves" then
+            if v.Name == "WoodSection" then sections += 1 end
+            total += v.Mass
+        end
+    end
+    return total, sections
+end
+
 local function getTreeOfClass(clas)
-    local best, bestMass
-    for _, r in next, workspace:GetChildren() do
-        if r.Name == "TreeRegion" then
-            for _, t in next, r:GetChildren() do
-                if t:IsA("Model") and t:FindFirstChild("TreeClass") and t.TreeClass.Value == clas
-                    and t:FindFirstChild("CutEvent")
-                    and (not t:FindFirstChild("Owner") or t.Owner.Value == nil) then
-                    local m = 0
-                    for _, p in next, t:GetDescendants() do
-                        if p:IsA("BasePart") then m += p.Mass end
+    local list = {}
+    for _, region in next, workspace:GetChildren() do
+        if region.Name == "TreeRegion" then
+            for _, tree in next, region:GetChildren() do
+                if tree:IsA("Model") and tree:FindFirstChild("CutEvent") then
+                    local tc = tree:FindFirstChild("TreeClass")
+                    local ow = tree:FindFirstChild("Owner")
+                    if ow and tc and ow.Value == nil and tc.Value == clas then
+                        local mass, secs = getModlMass(tree)
+                        if secs > 1 then
+                            list[#list + 1] = {tre = tree, mass = mass}
+                        end
                     end
-                    if not bestMass or m > bestMass then best, bestMass = t, m end
                 end
             end
         end
     end
-    return best
+    table.sort(list, function(a, b) return a.mass > b.mass end)
+    return list[1] and list[1].tre or nil
+end
+
+local function hahaRootJoint()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local rj = hrp:FindFirstChild("RootJoint")
+    if not rj then return end
+    pcall(function()
+        rj:Clone().Parent = rj.Parent
+        rj:Destroy()
+    end)
+    task.wait()
+end
+
+local function getBestAxe(woodType)
+    local list = {}
+    for _, a in next, LocalPlayer.Backpack:GetChildren() do
+        if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then
+            local s = getAxStats(a.ToolName.Value, woodType)
+            if s then list[#list + 1] = {ax = a, stats = s} end
+        end
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, a in next, char:GetChildren() do
+            if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then
+                local s = getAxStats(a.ToolName.Value, woodType)
+                if s then list[#list + 1] = {ax = a, stats = s} end
+            end
+        end
+    end
+    if #list == 0 then return nil, nil end
+    table.sort(list, function(a, b) return a.stats.Damage > b.stats.Damage end)
+    return list[1].ax, list[1].stats
+end
+
+local function getAnyAxe()
+    for _, a in next, LocalPlayer.Backpack:GetChildren() do
+        if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, a in next, char:GetChildren() do
+            if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end
+        end
+    end
+end
+
+local function fireCut(tree, ax, stats)
+    if not (tree and ax and stats) then return end
+    if not tree.Parent or not tree:FindFirstChild("CutEvent") then return end
+    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+        tool = ax, height = 0.3, faceVector = Vector3.new(1,0,0), sectionId = 1,
+        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+    })
+end
+
+local function dragLogTo(log, targetCF, frames)
+    frames = frames or 90
+    local lastPos, stuck = nil, 0
+    for _ = 1, frames do
+        if _G.AbortAction or not log.Parent then break end
+        pcall(function() log:PivotTo(targetCF) end)
+        local ws = log:FindFirstChild("WoodSection") or log:FindFirstChildWhichIsA("BasePart")
+        if ws then
+            local diff = targetCF.Position - ws.Position
+            if diff.Magnitude > 0.5 then
+                for _, p in ipairs(log:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        pcall(function() p.CFrame = p.CFrame + diff end)
+                    end
+                end
+            end
+            if lastPos and (ws.Position - lastPos).Magnitude < 0.1 then
+                stuck += 1
+                if stuck > 30 then break end
+            else
+                stuck = 0
+            end
+            lastPos = ws.Position
+        end
+        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(log)
+        task.wait()
+    end
+end
+
+local function treeStandCF(tree)
+    local ws = tree:FindFirstChild("WoodSection") or tree:FindFirstChildWhichIsA("BasePart")
+    if ws then return CFrame.new(ws.Position + Vector3.new(5, 3, 0)) end
+    return CFrame.new(tree:GetPivot().Position + Vector3.new(5, 3, 0))
 end
 
 local function bringAllLoose()
@@ -393,29 +527,6 @@ end
 local SELL_CF = CFrame.new(315, -0.296, 85.791) * CFrame.Angles(math.rad(90), 0, 0)
 local MAX_SELL = 1
 local sellInFlight = 0
-
-local function isMyLog(log)
-    if not log:IsA("Model") then return false end
-    if not string.find(log.Name, "^Loose_") then return false end
-    local o = log:FindFirstChild("Owner")
-    if not o then return false end
-    local v = o.Value
-    return v == LocalPlayer or v == LocalPlayer.UserId
-end
-
-local function getWoodSections(log)
-    local s = {}
-    for _, c in ipairs(log:GetDescendants()) do
-        if c:IsA("BasePart") and c.Name == "WoodSection" then
-            s[#s + 1] = c
-        end
-    end
-    if #s == 0 then
-        local p = log:FindFirstChildWhichIsA("BasePart")
-        if p then s[1] = p end
-    end
-    return s
-end
 
 local function sellOne(log)
     sellInFlight += 1
@@ -482,131 +593,6 @@ local function sellEverything(silent)
     return queued
 end
 
-local function getAxe()
-    local char = LocalPlayer.Character
-    if char then
-        for _, v in ipairs(char:GetChildren()) do
-            if v:FindFirstChild("ToolName") then return v end
-        end
-    end
-    for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
-        if v:FindFirstChild("ToolName") then return v end
-    end
-end
-
-local function fireCut(tree, ax, stats)
-    if not (tree and ax and stats) then return end
-    if not tree.Parent or not tree:FindFirstChild("CutEvent") then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local origParent = ax.Parent
-    if origParent ~= char then
-        pcall(function() ax.Parent = char end)
-    end
-    pcall(function()
-        ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
-            tool = ax, height = 0.3, faceVector = Vector3.new(1,0,0), sectionId = 1,
-            hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
-        })
-    end)
-    if origParent ~= char and ax.Parent == char then
-        pcall(function() ax.Parent = origParent end)
-    end
-end
-
-local function dragLogTo(log, targetCF, frames)
-    frames = frames or 120
-    local lastPos
-    local stuck = 0
-    for _ = 1, frames do
-        if _G.AbortAction or not log.Parent then break end
-        pcall(function() log:PivotTo(targetCF) end)
-        local ws = log:FindFirstChild("WoodSection") or log:FindFirstChildWhichIsA("BasePart")
-        if ws then
-            local diff = targetCF.Position - ws.Position
-            if diff.Magnitude > 0.5 then
-                for _, p in ipairs(log:GetDescendants()) do
-                    if p:IsA("BasePart") then
-                        pcall(function() p.CFrame = p.CFrame + diff end)
-                    end
-                end
-            end
-            if lastPos and (ws.Position - lastPos).Magnitude < 0.1 then
-                stuck += 1
-                if stuck > 30 then break end
-            else
-                stuck = 0
-            end
-            lastPos = ws.Position
-        end
-        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(log)
-        task.wait()
-    end
-end
-
-local function treeStandCF(tree)
-    local low, lowY = nil, math.huge
-    for _, p in ipairs(tree:GetDescendants()) do
-        if p:IsA("BasePart") and p.CanCollide and p.Position.Y < lowY then
-            low, lowY = p, p.Position.Y
-        end
-    end
-    if low then return CFrame.new(low.Position + Vector3.new(4,2,0)) end
-    return CFrame.new(tree:GetPivot().Position + Vector3.new(5,3,0))
-end
-
-local function bringWood(woodType)
-    local curpos = LocalPlayer.Character.HumanoidRootPart.CFrame
-    local target = getTreeOfClass(woodType)
-    local ax = getAxe()
-    if not (target and ax) then
-        notify("Wood", "No tree or axe found", 3)
-        return
-    end
-    notify("Wood", "Bringing " .. woodType .. "...")
-    local stats = getAxStats(ax.ToolName.Value, woodType)
-    if not stats then
-        notify("Wood", "No axe stats for " .. ax.ToolName.Value, 3)
-        return
-    end
-    local newLog
-    local con = workspace.LogModels.ChildAdded:Connect(function(l)
-        task.spawn(function()
-            local o = l:WaitForChild("Owner", 3)
-            if o and o.Value == LocalPlayer then newLog = l end
-        end)
-    end)
-    for _, l in ipairs(workspace.LogModels:GetChildren()) do
-        if l.Name:sub(1,6) == "Loose_" and l:FindFirstChild("Owner") and l.Owner.Value == LocalPlayer then
-            newLog = newLog or l
-        end
-    end
-    local sc = treeStandCF(target)
-    local lp = RunService.Heartbeat:Connect(function()
-        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if r then r.CFrame = sc end
-    end)
-    local t0 = tick()
-    local giveUp
-    repeat
-        fireCut(target, ax, stats)
-        task.wait(stats.SwingCooldown)
-        if not target.Parent then giveUp = true end
-        if tick() - t0 > 25 then giveUp = true end
-    until newLog ~= nil or _G.AbortAction or giveUp
-    lp:Disconnect()
-    con:Disconnect()
-    if not newLog then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = curpos
-        notify("Wood", giveUp and "Timed out" or "Aborted", 2)
-        return
-    end
-    task.wait(0.3)
-    dragLogTo(newLog, curpos, 120)
-    LocalPlayer.Character.HumanoidRootPart.CFrame = curpos
-    notify("Wood", woodType .. " brought")
-end
-
 local function lonecaveTree()
     for _, region in ipairs(workspace:GetChildren()) do
         if region.Name == "TreeRegion" then
@@ -619,6 +605,118 @@ local function lonecaveTree()
             end
         end
     end
+end
+
+local function bringWood(woodType)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false, "No character" end
+    local curpos = hrp.CFrame
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then pcall(function() hum:UnequipTools() end) end
+    task.wait()
+
+    local tre = getTreeOfClass(woodType)
+    if not tre then return false, "No tree found" end
+
+    local ax, stats = getBestAxe(woodType)
+    if not ax then return false, "Pick up an axe" end
+    if not stats then return false, "No axe stats" end
+
+    local isLone = woodType == "LoneCave"
+    if isLone then
+        if ax.ToolName.Value ~= "EndTimesAxe" then
+            return false, "Need EndTimesAxe for LoneCave"
+        end
+        hahaRootJoint()
+    end
+
+    notify("Wood", "Bringing " .. woodType .. "...")
+
+    local ws = tre:FindFirstChild("WoodSection") or tre:FindFirstChildWhichIsA("BasePart")
+    local targetPos = ws and (ws.Position + Vector3.new(5, 3, 0)) or (tre:GetPivot().Position + Vector3.new(5, 3, 0))
+
+    local loptp
+    if not isLone then
+        loptp = RunService.Heartbeat:Connect(function()
+            local c = LocalPlayer.Character
+            local r = c and c:FindFirstChild("HumanoidRootPart")
+            if r and tre.Parent then
+                r.CFrame = CFrame.new(targetPos)
+            end
+        end)
+    else
+        hrp.CFrame = CFrame.new(targetPos)
+    end
+    task.wait(0.25)
+
+    local newLog
+    local logConn = workspace.LogModels.ChildAdded:Connect(function(l)
+        task.wait()
+        local o = l:FindFirstChild("Owner")
+        if o and o.Value == LocalPlayer then newLog = l end
+    end)
+
+    local t0 = tick()
+    repeat
+        if not tre.Parent or _G.AbortAction or tick() - t0 > 60 then break end
+        fireCut(tre, ax, stats)
+        task.wait(stats.SwingCooldown)
+    until newLog ~= nil
+
+    logConn:Disconnect()
+    if loptp then loptp:Disconnect() end
+
+    if not newLog then
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if r and not isLone then r.CFrame = curpos end
+        return false, "No log spawned"
+    end
+
+    task.wait(0.15)
+    task.spawn(function()
+        for _ = 1, 60 do
+            ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
+            task.wait()
+        end
+    end)
+    task.wait(0.1)
+
+    local wp = newLog:FindFirstChild("WoodSection")
+    if wp then newLog.PrimaryPart = wp end
+    if newLog.PrimaryPart then
+        for _ = 1, 60 do
+            if _G.AbortAction then break end
+            pcall(function()
+                newLog.PrimaryPart.Velocity = Vector3.zero
+                newLog:PivotTo(curpos)
+            end)
+            task.wait()
+        end
+    end
+
+    if isLone then
+        local ch = LocalPlayer.Character
+        if ch then
+            local h = ch:FindFirstChildOfClass("Humanoid")
+            if h then pcall(function() h:UnequipTools() end) end
+            task.wait()
+            local head = ch:FindFirstChild("Head")
+            if head then head:Destroy() end
+        end
+        LocalPlayer.CharacterAdded:Wait()
+        task.wait(1.5)
+        local nh = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local wp2 = newLog:FindFirstChild("WoodSection")
+        if nh and wp2 then nh.CFrame = wp2.CFrame end
+        return true, "Lonecave brought"
+    end
+
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then r.CFrame = curpos end
+    notify("Wood", woodType .. " brought")
+    return true, "Brought"
 end
 
 Tabs.Home:AddButton({Title = "Load RTX Graphics", Callback = function()
@@ -705,7 +803,9 @@ Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
     task.spawn(function()
         for _ = 1, woodAmount do
             if _G.AbortAction then break end
-            bringWood(woodMap[selectedWood])
+            local ok, msg = bringWood(woodMap[selectedWood])
+            if not ok then notify("Wood", msg, 3); break end
+            task.wait(0.5)
         end
     end)
 end})
@@ -1562,7 +1662,7 @@ Tabs.AutoChop:AddToggle("AutoChopToggle", {Title = "Auto Chop", Default = false,
     task.spawn(function()
         while autoChopOn and chopLoopId == loopId and _G.MasterActive do
             local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local ax = getAxe()
+            local ax = getAnyAxe()
             if hrp and ax then
                 local axName = ax.ToolName.Value
                 for _, tree in ipairs(nearbyTrees(MAX_AT_ONCE)) do
@@ -1618,26 +1718,31 @@ Tabs.Farm:AddToggle("AutoFarm", {Title = "Auto Farm", Default = false, Callback 
     task.spawn(function()
         while autoFarmActive and _G.MasterActive do
             pcall(function()
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
                 local curpos = hrp.CFrame
                 local target = getTreeOfClass(autoFarmWoodType)
-                local ax = getAxe()
-                if not (target and ax) then
+                local ax, stats = getBestAxe(autoFarmWoodType)
+                if not (target and ax and stats) then
                     farmStatus:SetDesc("No tree or axe found"); task.wait(2); return
                 end
                 farmStatus:SetDesc("Cutting " .. autoFarmWoodType)
-                local stats = getAxStats(ax.ToolName.Value, autoFarmWoodType)
-                if not stats then farmStatus:SetDesc("No axe stats"); return end
+                local ws = target:FindFirstChild("WoodSection") or target:FindFirstChildWhichIsA("BasePart")
+                local targetPos = ws and (ws.Position + Vector3.new(5,3,0)) or (target:GetPivot().Position + Vector3.new(5,3,0))
                 local newLog
                 local con = workspace.LogModels.ChildAdded:Connect(function(l)
-                    local o = l:WaitForChild("Owner", 2)
+                    task.wait()
+                    local o = l:FindFirstChild("Owner")
                     if o and o.Value == LocalPlayer then newLog = l end
                 end)
-                local sc = treeStandCF(target)
-                local lp = RunService.Heartbeat:Connect(function() hrp.CFrame = sc end)
+                local lp = RunService.Heartbeat:Connect(function()
+                    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if r and target.Parent then r.CFrame = CFrame.new(targetPos) end
+                end)
                 local timeout = 0
                 repeat
+                    if not target.Parent then break end
                     fireCut(target, ax, stats)
                     task.wait(stats.SwingCooldown)
                     timeout += stats.SwingCooldown
@@ -1732,16 +1837,27 @@ end})
 Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = function() sellEverything(false) end})
 Tabs.Misc:AddButton({Title = "Sell Debug", Callback = function()
     local all, mine = 0, 0
+    local samples = {}
     for _, log in ipairs(workspace.LogModels:GetChildren()) do
-        if log:IsA("Model") and string.find(log.Name, "^Loose_") then
+        if log:IsA("Model") and string.find(log.Name, "Loose_") then
             all += 1
             local o = log:FindFirstChild("Owner")
-            if o and (o.Value == LocalPlayer or o.Value == LocalPlayer.UserId) then
-                mine += 1
+            if o then
+                if ownsValue(o.Value) then
+                    mine += 1
+                elseif #samples < 3 then
+                    samples[#samples + 1] = typeof(o.Value) .. "=" .. tostring(o.Value)
+                end
+            else
+                if #samples < 3 then samples[#samples + 1] = "no Owner" end
             end
         end
     end
     notify("Sell Debug", all .. " loose, " .. mine .. " yours", 4)
+    if #samples > 0 then
+        task.wait(0.5)
+        notify("Owner samples", table.concat(samples, " | "), 6)
+    end
 end})
 
 Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function() notify("Dupe", "Axe dupe is patched", 3) end})
