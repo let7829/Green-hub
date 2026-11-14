@@ -1,3 +1,5 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -6,7 +8,6 @@ local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local VU = game:GetService("VirtualUser")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 _G.AntiAFK = true
@@ -28,428 +29,94 @@ local function track(c)
     return c
 end
 local function disconnectAll()
-    for _, c in ipairs(Connections) do pcall(function() c:Disconnect() end) end
+    for _, c in ipairs(Connections) do
+        pcall(function() c:Disconnect() end)
+    end
     table.clear(Connections)
 end
-local function dc(c) if c then pcall(function() c:Disconnect() end) end end
+local function dc(c)
+    if c then pcall(function() c:Disconnect() end) end
+end
 
-local draggerConn, autoRejoinConn
+local draggerConn, autoRejoinConn, ultraConn
 local vehFlyOn, vehSpeedOn = false, false
 
-local Options = {}
-
-local C_BG = Color3.fromRGB(17, 17, 17)
-local C_ELEMENT = Color3.fromRGB(26, 26, 26)
-local C_STROKE = Color3.fromRGB(38, 38, 38)
-local C_ACCENT = Color3.fromRGB(0, 145, 255)
-local C_TEXT = Color3.fromRGB(255, 255, 255)
-local C_SUBTEXT = Color3.fromRGB(170, 170, 170)
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GreenHubUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-local function notify(title, text)
-    local notif = Instance.new("Frame")
-    notif.Size = UDim2.fromOffset(340, 70)
-    notif.Position = UDim2.new(1, -360, 0, 50)
-    notif.BackgroundColor3 = C_BG
-    notif.Parent = ScreenGui
-    Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 10)
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = C_STROKE
-    stroke.Thickness = 1
-    stroke.Parent = notif
-
-    local tLbl = Instance.new("TextLabel")
-    tLbl.Size = UDim2.new(1, -20, 0, 20)
-    tLbl.Position = UDim2.new(0, 15, 0, 15)
-    tLbl.BackgroundTransparency = 1
-    tLbl.Text = title
-    tLbl.TextColor3 = C_TEXT
-    tLbl.TextSize = 15
-    tLbl.Font = Enum.Font.Gotham
-    tLbl.TextXAlignment = Enum.TextXAlignment.Left
-    tLbl.Parent = notif
-
-    local dLbl = Instance.new("TextLabel")
-    dLbl.Size = UDim2.new(1, -20, 0, 20)
-    dLbl.Position = UDim2.new(0, 15, 0, 38)
-    dLbl.BackgroundTransparency = 1
-    dLbl.Text = text
-    dLbl.TextColor3 = C_TEXT
-    dLbl.TextSize = 13
-    dLbl.Font = Enum.Font.Gotham
-    dLbl.TextXAlignment = Enum.TextXAlignment.Left
-    dLbl.Parent = notif
-
-    task.delay(5, function()
-        TweenService:Create(notif, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(tLbl, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        TweenService:Create(dLbl, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        TweenService:Create(stroke, TweenInfo.new(0.5), {Transparency = 1}):Play()
-        task.wait(0.5)
-        notif:Destroy()
-    end)
-end
-notify("Interface", "Press RightShift to toggle the interface.")
-
-local Main = Instance.new("Frame")
-Main.Size = UDim2.fromOffset(700, 450)
-Main.Position = UDim2.new(0.5, -350, 0.5, -225)
-Main.BackgroundColor3 = C_BG
-Main.Parent = ScreenGui
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = C_STROKE
-mainStroke.Thickness = 1
-mainStroke.Parent = Main
-
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 50)
-TopBar.BackgroundTransparency = 1
-TopBar.Parent = Main
-
-local Title = Instance.new("TextLabel")
-Title.Position = UDim2.new(0, 20, 0, 0)
-Title.Size = UDim2.new(0, 100, 1, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "Green Hub"
-Title.TextColor3 = C_TEXT
-Title.TextSize = 16
-Title.Font = Enum.Font.Gotham
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
-local Subtitle = Instance.new("TextLabel")
-Subtitle.Position = UDim2.new(0, 100, 0, 0)
-Subtitle.Size = UDim2.new(0, 300, 1, 0)
-Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "Sox7829|Let7829 V3"
-Subtitle.TextColor3 = C_SUBTEXT
-Subtitle.TextSize = 16
-Subtitle.Font = Enum.Font.Gotham
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.Parent = TopBar
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.fromOffset(30, 30)
-CloseBtn.Position = UDim2.new(1, -40, 0.5, -15)
-CloseBtn.BackgroundTransparency = 1
-CloseBtn.Text = "×"
-CloseBtn.TextColor3 = C_TEXT
-CloseBtn.TextSize = 24
-CloseBtn.Font = Enum.Font.Gotham
-CloseBtn.Parent = TopBar
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui.Enabled = false end)
-
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.fromOffset(30, 30)
-MinBtn.Position = UDim2.new(1, -70, 0.5, -15)
-MinBtn.BackgroundTransparency = 1
-MinBtn.Text = "—"
-MinBtn.TextColor3 = C_SUBTEXT
-MinBtn.TextSize = 18
-MinBtn.Font = Enum.Font.Gotham
-MinBtn.Parent = TopBar
-
-local Sep = Instance.new("Frame")
-Sep.Size = UDim2.new(1, -40, 0, 1)
-Sep.Position = UDim2.new(0, 20, 0, 50)
-Sep.BackgroundColor3 = C_STROKE
-Sep.BorderSizePixel = 0
-Sep.Parent = Main
-
-local Sidebar = Instance.new("Frame")
-Sidebar.Size = UDim2.new(0, 180, 1, -60)
-Sidebar.Position = UDim2.new(0, 10, 0, 55)
-Sidebar.BackgroundTransparency = 1
-Sidebar.Parent = Main
-
-local SidebarScroll = Instance.new("ScrollingFrame")
-SidebarScroll.Size = UDim2.new(1, 0, 1, 0)
-SidebarScroll.BackgroundTransparency = 1
-SidebarScroll.ScrollBarThickness = 0
-SidebarScroll.CanvasSize = UDim2.new()
-SidebarScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-SidebarScroll.Parent = Sidebar
-Instance.new("UIListLayout", {Padding = UDim.new(0, 4), Parent = SidebarScroll})
-
-local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, -200, 1, -60)
-Content.Position = UDim2.new(0, 190, 0, 55)
-Content.BackgroundTransparency = 1
-Content.Parent = Main
-
-local ContentTitle = Instance.new("TextLabel")
-ContentTitle.Size = UDim2.new(1, 0, 0, 40)
-ContentTitle.BackgroundTransparency = 1
-ContentTitle.Text = "Home"
-ContentTitle.TextColor3 = C_TEXT
-ContentTitle.TextSize = 24
-ContentTitle.Font = Enum.Font.GothamBold
-ContentTitle.TextXAlignment = Enum.TextXAlignment.Left
-ContentTitle.Parent = Content
-
-local ContentScroll = Instance.new("ScrollingFrame")
-ContentScroll.Position = UDim2.new(0, 0, 0, 50)
-ContentScroll.Size = UDim2.new(1, 0, 1, -50)
-ContentScroll.BackgroundTransparency = 1
-ContentScroll.ScrollBarThickness = 2
-ContentScroll.ScrollBarImageColor3 = C_STROKE
-ContentScroll.CanvasSize = UDim2.new()
-ContentScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-ContentScroll.Parent = Content
-
-local Tabs = {}
-local ActiveTab = nil
-
-local function CreateTab(name, iconId)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 40)
-    btn.BackgroundColor3 = C_BG
-    btn.Text = ""
-    btn.Parent = SidebarScroll
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    
-    local ind = Instance.new("Frame")
-    ind.Name = "Indicator"
-    ind.Size = UDim2.new(0, 3, 0, 16)
-    ind.Position = UDim2.new(0, 0, 0.5, -8)
-    ind.BackgroundColor3 = C_ACCENT
-    ind.Visible = false
-    ind.Parent = btn
-    Instance.new("UICorner", ind).CornerRadius = UDim.new(1, 0)
-    
-    local ico = Instance.new("ImageLabel")
-    ico.Size = UDim2.fromOffset(20, 20)
-    ico.Position = UDim2.new(0, 15, 0.5, -10)
-    ico.BackgroundTransparency = 1
-    ico.Image = iconId
-    ico.ImageColor3 = C_SUBTEXT
-    ico.Parent = btn
-    
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -45, 1, 0)
-    lbl.Position = UDim2.new(0, 45, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = name
-    lbl.TextColor3 = C_SUBTEXT
-    lbl.TextSize = 14
-    lbl.Font = Enum.Font.Gotham
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = btn
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 0, 0)
-    frame.AutomaticSize = Enum.AutomaticSize.Y
-    frame.BackgroundTransparency = 1
-    frame.Visible = false
-    frame.Parent = ContentScroll
-    Instance.new("UIListLayout", {Padding = UDim.new(0, 8), Parent = frame})
-    
-    btn.MouseButton1Click:Connect(function()
-        if ActiveTab then
-            ActiveTab.Btn.BackgroundColor3 = C_BG
-            ActiveTab.Btn.Indicator.Visible = false
-            ActiveTab.Lbl.TextColor3 = C_SUBTEXT
-            ActiveTab.Ico.ImageColor3 = C_SUBTEXT
-            ActiveTab.Frame.Visible = false
-        end
-        ActiveTab = Tabs[name]
-        btn.BackgroundColor3 = C_ELEMENT
-        ind.Visible = true
-        lbl.TextColor3 = C_TEXT
-        ico.ImageColor3 = C_TEXT
-        frame.Visible = true
-        ContentTitle.Text = name
-    end)
-    
-    Tabs[name] = {Btn = btn, Lbl = lbl, Ico = ico, Frame = frame}
-    if not ActiveTab then
-        ActiveTab = Tabs[name]
-        btn.BackgroundColor3 = C_ELEMENT
-        ind.Visible = true
-        lbl.TextColor3 = C_TEXT
-        ico.ImageColor3 = C_TEXT
-        frame.Visible = true
-        ContentTitle.Text = name
-    end
-    return frame
+local lastNotify = {}
+local function notify(title, content, dur)
+    local k = tostring(title) .. "|" .. tostring(content)
+    if lastNotify[k] and tick() - lastNotify[k] < 1.5 then return end
+    lastNotify[k] = tick()
+    Fluent:Notify({Title = title, Content = content or "", Duration = dur or 3})
 end
 
-local function BaseElement(p, h)
-    local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, h)
-    f.BackgroundColor3 = C_ELEMENT
-    f.Parent = p
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
-    local s = Instance.new("UIStroke")
-    s.Color = C_STROKE
-    s.Thickness = 1
-    s.Parent = f
-    return f
-end
+local Window = Fluent:CreateWindow({
+    Title = "Green Hub",
+    SubTitle = "Sox7829|Let7829 V3",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(680, 340),
+    Acrylic = false,
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.RightShift,
+    Search = true,
+})
 
-local function AddButton(p, t, cb)
-    local f = BaseElement(p, 50)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, 0, 1, 0)
-    b.BackgroundTransparency = 1
-    b.Text = ""
-    b.Parent = f
-    
-    local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1, -40, 1, 0)
-    l.Position = UDim2.new(0, 15, 0, 0)
-    l.BackgroundTransparency = 1
-    l.Text = t
-    l.TextColor3 = C_TEXT
-    l.TextSize = 14
-    l.Font = Enum.Font.Gotham
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = f
-    
-    local c = Instance.new("TextLabel")
-    c.Size = UDim2.fromOffset(20, 20)
-    c.Position = UDim2.new(1, -30, 0.5, -10)
-    c.BackgroundTransparency = 1
-    c.Text = ">"
-    c.TextColor3 = C_SUBTEXT
-    c.TextSize = 18
-    c.Font = Enum.Font.GothamBold
-    c.Parent = f
-    
-    b.MouseButton1Click:Connect(function() if cb then task.spawn(cb) end end)
-end
-
-local function AddToggle(p, t, def, cb)
-    local st = def or false
-    local f = BaseElement(p, 50)
-    local l = Instance.new("TextLabel", {Size = UDim2.new(1, -80, 1, 0), Position = UDim2.new(0, 15, 0, 0), BackgroundTransparency = 1, Text = t, TextColor3 = C_TEXT, TextSize = 14, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = f})
-    local tr = Instance.new("Frame", {Size = UDim2.fromOffset(40, 20), Position = UDim2.new(1, -55, 0.5, -10), BackgroundColor3 = st and C_ACCENT or C_STROKE, Parent = f})
-    Instance.new("UICorner", tr).CornerRadius = UDim.new(1, 0)
-    local kn = Instance.new("Frame", {Size = UDim2.fromOffset(16, 16), Position = st and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8), BackgroundColor3 = C_TEXT, Parent = tr})
-    Instance.new("UICorner", kn).CornerRadius = UDim.new(1, 0)
-    local b = Instance.new("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = f})
-    
-    b.MouseButton1Click:Connect(function()
-        st = not st
-        TweenService:Create(tr, TweenInfo.new(0.2), {BackgroundColor3 = st and C_ACCENT or C_STROKE}):Play()
-        TweenService:Create(kn, TweenInfo.new(0.2), {Position = st and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}):Play()
-        if cb then task.spawn(cb, st) end
-    end)
-    return {Value = st, SetValue = function(v) st = v tr.BackgroundColor3 = st and C_ACCENT or C_STROKE kn.Position = st and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8) if cb then task.spawn(cb, st) end end}
-end
-
-local function AddSlider(p, t, mn, mx, def, cb)
-    local v = def or mn
-    local f = BaseElement(p, 50)
-    local l = Instance.new("TextLabel", {Size = UDim2.new(1, -100, 0, 20), Position = UDim2.new(0, 15, 0, 8), BackgroundTransparency = 1, Text = t, TextColor3 = C_TEXT, TextSize = 14, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = f})
-    local vt = Instance.new("TextLabel", {Size = UDim2.new(0, 50, 0, 20), Position = UDim2.new(1, -65, 0, 8), BackgroundTransparency = 1, Text = tostring(v), TextColor3 = C_SUBTEXT, TextSize = 14, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Right, Parent = f})
-    local tr = Instance.new("Frame", {Size = UDim2.new(1, -30, 0, 4), Position = UDim2.new(0, 15, 0, 35), BackgroundColor3 = C_STROKE, Parent = f})
-    Instance.new("UICorner", tr).CornerRadius = UDim.new(1, 0)
-    local fl = Instance.new("Frame", {Size = UDim2.new((v - mn) / (mx - mn), 0, 1, 0), BackgroundColor3 = C_ACCENT, Parent = tr})
-    Instance.new("UICorner", fl).CornerRadius = UDim.new(1, 0)
-    local kn = Instance.new("Frame", {Size = UDim2.fromOffset(12, 12), Position = UDim2.new(1, -6, 0.5, -6), BackgroundColor3 = C_ACCENT, Parent = fl})
-    Instance.new("UICorner", kn).CornerRadius = UDim.new(1, 0)
-    local b = Instance.new("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = f})
-    
-    local drag = false
-    local function upd(x)
-        local rel = math.clamp((x - tr.AbsolutePosition.X) / tr.AbsoluteSize.X, 0, 1)
-        v = math.floor(mn + rel * (mx - mn) + 0.5)
-        vt.Text = tostring(v)
-        fl.Size = UDim2.new(rel, 0, 1, 0)
-        if cb then task.spawn(cb, v) end
-    end
-    tr.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = true upd(i.Position.X) end end)
-    UIS.InputChanged:Connect(function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then upd(i.Position.X) end end)
-    UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end end)
-    
-    return {Value = v, SetValue = function(nv) v = math.clamp(nv, mn, mx) vt.Text = tostring(v) fl.Size = UDim2.new((v - mn) / (mx - mn), 0, 1, 0) if cb then task.spawn(cb, v) end end}
-end
-
-local function AddDropdown(p, t, opts, def, cb)
-    local sel = opts[def or 1]
-    local f = BaseElement(p, 50)
-    local l = Instance.new("TextLabel", {Size = UDim2.new(1, -180, 1, 0), Position = UDim2.new(0, 15, 0, 0), BackgroundTransparency = 1, Text = t, TextColor3 = C_TEXT, TextSize = 14, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = f})
-    local b = Instance.new("TextButton", {Size = UDim2.fromOffset(130, 34), Position = UDim2.new(1, -145, 0.5, -17), BackgroundColor3 = C_BG, Text = "", Parent = f})
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-    local bs = Instance.new("UIStroke", {Color = C_STROKE, Thickness = 1, Parent = b})
-    local sl = Instance.new("TextLabel", {Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = sel, TextColor3 = C_TEXT, TextSize = 13, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = b})
-    local ar = Instance.new("TextLabel", {Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -25, 0.5, -10), BackgroundTransparency = 1, Text = "v", TextColor3 = C_SUBTEXT, TextSize = 14, Font = Enum.Font.GothamBold, Parent = b})
-    
-    local open = nil
-    b.MouseButton1Click:Connect(function()
-        if open then open:Destroy() open = nil return end
-        open = Instance.new("Frame", {Size = UDim2.fromOffset(130, math.min(#opts * 32 + 10, 200)), Position = UDim2.new(0, b.AbsolutePosition.X - Main.AbsolutePosition.X, 0, b.AbsolutePosition.Y - Main.AbsolutePosition.Y + 38), BackgroundColor3 = C_BG, ZIndex = 10, Parent = Main})
-        Instance.new("UICorner", open).CornerRadius = UDim.new(0, 8)
-        Instance.new("UIStroke", {Color = C_STROKE, Parent = open})
-        local sc = Instance.new("ScrollingFrame", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 2, ScrollBarImageColor3 = C_STROKE, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 11, Parent = open})
-        Instance.new("UIPadding", {PaddingTop = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5), Parent = sc})
-        Instance.new("UIListLayout", {Padding = UDim.new(0, 2), Parent = sc})
-        for _, o in ipairs(opts) do
-            local ob = Instance.new("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = C_ELEMENT, Text = o, TextColor3 = C_TEXT, TextSize = 13, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12, Parent = sc})
-            Instance.new("UICorner", ob).CornerRadius = UDim.new(0, 6)
-            Instance.new("UIPadding", {PaddingLeft = UDim.new(0, 10), Parent = ob})
-            ob.MouseButton1Click:Connect(function() sel = o sl.Text = o open:Destroy() open = nil if cb then task.spawn(cb, o) end end)
-        end
-    end)
-    return {Value = sel, SetValue = function(v) sel = v sl.Text = v if cb then task.spawn(cb, v) end end}
-end
-
-local function AddParagraph(p, t)
-    local f = BaseElement(p, 40)
-    local l = Instance.new("TextLabel", {Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 15, 0, 0), BackgroundTransparency = 1, Text = t, TextColor3 = C_SUBTEXT, TextSize = 13, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = f})
-    return {Set = function(txt) l.Text = txt end}
-end
-
-local tabList = {
-    {"Home", "rbxassetid://10723407317"}, {"Wood", "rbxassetid://10734946811"}, {"Farm", "rbxassetid://10734940131"},
-    {"Player", "rbxassetid://10734950782"}, {"Teleport", "rbxassetid://10709775704"}, {"Autobuy", "rbxassetid://10709773080"},
-    {"Vehicle", "rbxassetid://10709771714"}, {"World", "rbxassetid://10709814740"}, {"Visuals", "rbxassetid://10709811331"},
-    {"Auto Chop", "rbxassetid://10734950505"}, {"OnScreen", "rbxassetid://10734951346"}, {"Automation", "rbxassetid://10734949032"},
-    {"Bring", "rbxassetid://10734951925"}, {"Search", "rbxassetid://10734952208"}, {"Slots", "rbxassetid://10734952465"},
-    {"Misc", "rbxassetid://10734952757"}, {"Dupe", "rbxassetid://10734953011"}, {"Settings", "rbxassetid://10734953277"}
+local Tabs = {
+    Home = Window:AddTab({Title = "Home", Icon = "home"}),
+    Wood = Window:AddTab({Title = "Wood", Icon = "trees"}),
+    Farm = Window:AddTab({Title = "Farm", Icon = "sprout"}),
+    Player = Window:AddTab({Title = "Player", Icon = "user"}),
+    Teleport = Window:AddTab({Title = "Teleport", Icon = "map-pin"}),
+    Autobuy = Window:AddTab({Title = "Autobuy", Icon = "shopping-cart"}),
+    Vehicle = Window:AddTab({Title = "Vehicle", Icon = "car"}),
+    World = Window:AddTab({Title = "World", Icon = "globe"}),
+    Visuals = Window:AddTab({Title = "Visuals", Icon = "eye"}),
+    AutoChop = Window:AddTab({Title = "Auto Chop", Icon = "axe"}),
+    OnScreen = Window:AddTab({Title = "OnScreen", Icon = "monitor"}),
+    Automation = Window:AddTab({Title = "Automation", Icon = "repeat"}),
+    Bring = Window:AddTab({Title = "Bring", Icon = "package"}),
+    Search = Window:AddTab({Title = "Search", Icon = "search"}),
+    Slots = Window:AddTab({Title = "Slots", Icon = "save"}),
+    Misc = Window:AddTab({Title = "Misc", Icon = "wrench"}),
+    Dupe = Window:AddTab({Title = "Dupe", Icon = "copy"}),
+    Settings = Window:AddTab({Title = "Settings", Icon = "settings"}),
 }
-local UI = {}
-for _, data in ipairs(tabList) do UI[data[1]] = CreateTab(data[1], data[2]) end
 
-local FloatBtn = Instance.new("TextButton", {Size = UDim2.fromOffset(120, 36), Position = UDim2.new(0, 20, 0, 120), BackgroundColor3 = C_BG, Text = "Open/Close", TextColor3 = C_ACCENT, TextSize = 14, Font = Enum.Font.GothamBold, Parent = ScreenGui})
-Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", {Color = C_ACCENT, Thickness = 2, Parent = FloatBtn})
-FloatBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+local Options = Fluent.Options
 
-local mdrag, mstart, mpos = false, nil, nil
-TopBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then mdrag, mstart, mpos = true, i.Position, Main.Position end end)
-UIS.InputChanged:Connect(function(i) if mdrag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local d = i.Position - mstart Main.Position = UDim2.new(mpos.X.Scale, mpos.X.Offset + d.X, mpos.Y.Scale, mpos.Y.Offset + d.Y) end end)
-UIS.InputEnded:Connect(function(i) if mdrag and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then mdrag = false end end)
-
-local fdrag, fstart, fpos, fmoved = false, nil, nil, false
-FloatBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then fdrag, fmoved, fstart, fpos = true, false, i.Position, FloatBtn.Position end end)
-UIS.InputChanged:Connect(function(i) if fdrag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local d = i.Position - fstart if d.Magnitude > 4 then fmoved = true end FloatBtn.Position = UDim2.new(fpos.X.Scale, fpos.X.Offset + d.X, fpos.Y.Scale, fpos.Y.Offset + d.Y) end end)
-UIS.InputEnded:Connect(function(i) if fdrag and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then fdrag = false if not fmoved then Main.Visible = not Main.Visible end end end)
-
-track(LocalPlayer.Idled:Connect(function() if _G.AntiAFK then VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame) task.wait(1) VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame) end end))
+track(LocalPlayer.Idled:Connect(function()
+    if _G.AntiAFK then
+        VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    end
+end))
 
 track(RunService.Heartbeat:Connect(function()
     local c = LocalPlayer.Character
     local h = c and c:FindFirstChildOfClass("Humanoid")
-    if h and Options.Speed and Options.Speed.Value then h.WalkSpeed = _G.WalkSpeed h.JumpPower = _G.JumpPower end
+    if h and Options.Speed and Options.Speed.Value then
+        h.WalkSpeed = _G.WalkSpeed
+        h.JumpPower = _G.JumpPower
+    end
 end))
 
 track(RunService.Heartbeat:Connect(function()
     if not _G.FullBright then return end
-    Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 100000 Lighting.GlobalShadows = false Lighting.Ambient = Color3.fromRGB(255,255,255)
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.Ambient = Color3.fromRGB(255,255,255)
 end))
 
 track(RunService.Stepped:Connect(function()
     if not _G.Noclip then return end
     local c = LocalPlayer.Character
-    if c then for _, p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
+    if c then
+        for _, p in pairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
 end))
 
 track(UIS.JumpRequest:Connect(function()
@@ -465,7 +132,11 @@ local function getFlyControls()
     if mod then pcall(function() flyControls = require(mod):GetControls() end) end
     return flyControls
 end
-task.spawn(function() LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule") getFlyControls() end)
+
+task.spawn(function()
+    LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")
+    getFlyControls()
+end)
 
 local function flyDirection(cam)
     local d = Vector3.zero
@@ -476,35 +147,64 @@ local function flyDirection(cam)
     if UIS:IsKeyDown(Enum.KeyCode.Space) then d += Vector3.yAxis end
     if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then d -= Vector3.yAxis end
     local ctl = getFlyControls()
-    if ctl then local mv = ctl:GetMoveVector() if mv.Magnitude > 0.05 then d += cam.CFrame.RightVector * mv.X + cam.CFrame.LookVector * -mv.Z end end
+    if ctl then
+        local mv = ctl:GetMoveVector()
+        if mv.Magnitude > 0.05 then
+            d += cam.CFrame.RightVector * mv.X + cam.CFrame.LookVector * -mv.Z
+        end
+    end
     return d
 end
 
 local flyBv, flyBg, flyConn, flyPlat, flyRoot
 local vehBv, vehConn, vehRoot
-local function stopFly() if flyConn then flyConn:Disconnect() flyConn = nil end if flyBv then flyBv:Destroy() flyBv = nil end if flyBg then flyBg:Destroy() flyBg = nil end if flyPlat and flyPlat.Parent then flyPlat.PlatformStand = false end flyPlat = nil flyRoot = nil end
+
+local function stopFly()
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+    if flyBv then flyBv:Destroy() flyBv = nil end
+    if flyBg then flyBg:Destroy() flyBg = nil end
+    if flyPlat and flyPlat.Parent then flyPlat.PlatformStand = false end
+    flyPlat = nil
+    flyRoot = nil
+end
+
 local function startFly()
     if flyConn then return true end
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return false end
     flyRoot = root
-    flyBv = Instance.new("BodyVelocity", root) flyBv.MaxForce = Vector3.new(math.huge, math.huge, math.huge) flyBv.Velocity = Vector3.zero
-    flyBg = Instance.new("BodyGyro", root) flyBg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge) flyBg.P = 9000
-    flyPlat = char:FindFirstChildOfClass("Humanoid") if flyPlat then flyPlat.PlatformStand = true end
+    flyBv = Instance.new("BodyVelocity", root)
+    flyBv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    flyBv.Velocity = Vector3.zero
+    flyBg = Instance.new("BodyGyro", root)
+    flyBg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    flyBg.P = 9000
+    flyPlat = char:FindFirstChildOfClass("Humanoid")
+    if flyPlat then flyPlat.PlatformStand = true end
     flyConn = RunService.RenderStepped:Connect(function()
         local c = LocalPlayer.Character
         local r = c and c:FindFirstChild("HumanoidRootPart")
         if r ~= flyRoot or not flyRoot.Parent then stopFly() return end
         if flyBv.Parent ~= flyRoot then flyBv.Parent = flyRoot end
         if flyBg.Parent ~= flyRoot then flyBg.Parent = flyRoot end
-        if flyPlat and flyPlat.Parent and not flyPlat.PlatformStand then flyPlat.PlatformStand = true end
-        local cam = workspace.CurrentCamera local d = flyDirection(cam)
-        flyBv.Velocity = d.Magnitude > 0 and d.Unit * _G.FlySpeed or Vector3.zero flyBg.CFrame = cam.CFrame
+        if flyPlat and flyPlat.Parent and not flyPlat.PlatformStand then
+            flyPlat.PlatformStand = true
+        end
+        local cam = workspace.CurrentCamera
+        local d = flyDirection(cam)
+        flyBv.Velocity = d.Magnitude > 0 and d.Unit * _G.FlySpeed or Vector3.zero
+        flyBg.CFrame = cam.CFrame
     end)
     return true
 end
-local function stopVehFly() if vehConn then vehConn:Disconnect() vehConn = nil end if vehBv then vehBv:Destroy() vehBv = nil end vehRoot = nil end
+
+local function stopVehFly()
+    if vehConn then vehConn:Disconnect() vehConn = nil end
+    if vehBv then vehBv:Destroy() vehBv = nil end
+    vehRoot = nil
+end
+
 local function startVehFly()
     if vehConn then return true end
     local char = LocalPlayer.Character
@@ -512,19 +212,31 @@ local function startVehFly()
     local seat = h and h.SeatPart
     if not seat then return false end
     vehRoot = seat
-    vehBv = Instance.new("BodyVelocity", seat) vehBv.MaxForce = Vector3.new(math.huge, math.huge, math.huge) vehBv.Velocity = Vector3.zero
+    vehBv = Instance.new("BodyVelocity", seat)
+    vehBv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    vehBv.Velocity = Vector3.zero
     vehConn = RunService.RenderStepped:Connect(function()
         local c = LocalPlayer.Character
         local hh = c and c:FindFirstChildOfClass("Humanoid")
         local s = hh and hh.SeatPart
         if s ~= vehRoot or not vehRoot.Parent then stopVehFly() return end
         if vehBv.Parent ~= vehRoot then vehBv.Parent = vehRoot end
-        local cam = workspace.CurrentCamera local d = flyDirection(cam)
+        local cam = workspace.CurrentCamera
+        local d = flyDirection(cam)
         vehBv.Velocity = d.Magnitude > 0 and d.Unit * _G.VehFlySpeed or Vector3.zero
     end)
     return true
 end
-local function SetFly(on) _G.Flying = on if on then if not startFly() then _G.Flying = false notify("Fly", "No character found") end else stopFly() end end
+
+local function SetFly(on)
+    _G.Flying = on
+    if on then
+        if not startFly() then
+            _G.Flying = false
+            notify("Fly", "No character found", 2)
+        end
+    else stopFly() end
+end
 
 track(LocalPlayer.CharacterAdded:Connect(function()
     stopFly() stopVehFly()
@@ -541,22 +253,39 @@ track(UIS.InputBegan:Connect(function(input, gp)
     elseif input.KeyCode == Enum.KeyCode.B then
         local n = 0
         for _, log in pairs(workspace.LogModels:GetChildren()) do
-            if log.Name:sub(1,6) == "Loose_" and log:FindFirstChild("Owner") and log.Owner.Value == LocalPlayer then log:MoveTo(LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0,10,0)) n += 1 end
+            if log.Name:sub(1,6) == "Loose_" and log:FindFirstChild("Owner") and log.Owner.Value == LocalPlayer then
+                log:MoveTo(LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0,10,0))
+                n += 1
+            end
         end
         notify("Wood brought", n .. " logs [B]")
     end
 end))
 
 local espBBs = {}
-local function clearPlayerESP() for _, v in pairs(espBBs) do pcall(function() v:Destroy() end) end espBBs = {} end
+local function clearPlayerESP()
+    for _, v in pairs(espBBs) do pcall(function() v:Destroy() end) end
+    espBBs = {}
+end
 local function updatePlayerESP()
-    clearPlayerESP() if not _G.ESPToggled then return end
+    clearPlayerESP()
+    if not _G.ESPToggled then return end
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
-                local bb = Instance.new("BillboardGui", hrp) bb.Size = UDim2.new(0,100,0,40) bb.StudsOffset = Vector3.new(0,3,0) bb.AlwaysOnTop = true
-                local lbl = Instance.new("TextLabel", bb) lbl.Size = UDim2.new(1,0,1,0) lbl.BackgroundTransparency = 1 lbl.Text = plr.Name lbl.TextColor3 = Color3.fromRGB(255,50,50) lbl.Font = Enum.Font.GothamBold lbl.TextSize = 14 lbl.TextStrokeTransparency = 0
+                local bb = Instance.new("BillboardGui", hrp)
+                bb.Size = UDim2.new(0,100,0,40)
+                bb.StudsOffset = Vector3.new(0,3,0)
+                bb.AlwaysOnTop = true
+                local lbl = Instance.new("TextLabel", bb)
+                lbl.Size = UDim2.new(1,0,1,0)
+                lbl.BackgroundTransparency = 1
+                lbl.Text = plr.Name
+                lbl.TextColor3 = Color3.fromRGB(255,50,50)
+                lbl.Font = Enum.Font.GothamBold
+                lbl.TextSize = 14
+                lbl.TextStrokeTransparency = 0
                 espBBs[#espBBs+1] = bb
             end
         end
@@ -565,45 +294,92 @@ end
 
 local itemESPOn = false
 local itemESPBBs = {}
-local function clearItemESP() for _, v in pairs(itemESPBBs) do pcall(function() v:Destroy() end) end itemESPBBs = {} end
+local function clearItemESP()
+    for _, v in pairs(itemESPBBs) do pcall(function() v:Destroy() end) end
+    itemESPBBs = {}
+end
 local function updateItemESP()
-    clearItemESP() if not itemESPOn then return end
+    clearItemESP()
+    if not itemESPOn then return end
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            local isLog = obj.Name:sub(1,6) == "Loose_" local isTree = obj:FindFirstChild("TreeClass") ~= nil
+            local isLog = obj.Name:sub(1,6) == "Loose_"
+            local isTree = obj:FindFirstChild("TreeClass") ~= nil
             if isLog or isTree then
                 local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
                 if part then
-                    local bb = Instance.new("BillboardGui", part) bb.Size = UDim2.new(0,120,0,35) bb.StudsOffset = Vector3.new(0,4,0) bb.AlwaysOnTop = true bb.MaxDistance = 500
-                    local lbl = Instance.new("TextLabel", bb) lbl.Size = UDim2.new(1,0,1,0) lbl.BackgroundTransparency = 1 lbl.Font = Enum.Font.GothamBold lbl.TextSize = 13 lbl.TextStrokeTransparency = 0
-                    if isLog then lbl.Text = "LOG" lbl.TextColor3 = Color3.fromRGB(255,200,0) else lbl.Text = obj.TreeClass.Value lbl.TextColor3 = Color3.fromRGB(0,255,100) end
+                    local bb = Instance.new("BillboardGui", part)
+                    bb.Size = UDim2.new(0,120,0,35)
+                    bb.StudsOffset = Vector3.new(0,4,0)
+                    bb.AlwaysOnTop = true
+                    bb.MaxDistance = 500
+                    local lbl = Instance.new("TextLabel", bb)
+                    lbl.Size = UDim2.new(1,0,1,0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Font = Enum.Font.GothamBold
+                    lbl.TextSize = 13
+                    lbl.TextStrokeTransparency = 0
+                    if isLog then
+                        lbl.Text = "LOG"
+                        lbl.TextColor3 = Color3.fromRGB(255,200,0)
+                    else
+                        lbl.Text = obj.TreeClass.Value
+                        lbl.TextColor3 = Color3.fromRGB(0,255,100)
+                    end
                     itemESPBBs[#itemESPBBs+1] = bb
                 end
             end
         end
     end
 end
-task.spawn(function() while _G.MasterActive do if itemESPOn then updateItemESP() end task.wait(3) end end)
+task.spawn(function()
+    while _G.MasterActive do
+        if itemESPOn then updateItemESP() end
+        task.wait(3)
+    end
+end)
 
 local function getAxStats(axName, treClas)
     local mod = ReplicatedStorage.AxeClasses:FindFirstChild("AxeClass_" .. axName)
     if not mod then return end
     local ok, s = pcall(function() return require(mod).new() end)
     if not ok or not s then return end
-    if s.SpecialTrees and s.SpecialTrees[treClas] then for k, v in next, s.SpecialTrees[treClas] do s[k] = v end end
+    if s.SpecialTrees and s.SpecialTrees[treClas] then
+        for k, v in next, s.SpecialTrees[treClas] do s[k] = v end
+    end
     return s
 end
-local function ownsValue(v) if v == nil then return false end if v == LocalPlayer or v == LocalPlayer.UserId then return true end if v == LocalPlayer.Character then return true end return false end
-local function isMyLog(log) if not log:IsA("Model") then return false end local o = log:FindFirstChild("Owner") if not o then return false end return ownsValue(o.Value) end
+local function ownsValue(v)
+    if v == nil then return false end
+    if v == LocalPlayer or v == LocalPlayer.UserId then return true end
+    if v == LocalPlayer.Character then return true end
+    return false
+end
+local function isMyLog(log)
+    if not log:IsA("Model") then return false end
+    local o = log:FindFirstChild("Owner")
+    if not o then return false end
+    return ownsValue(o.Value)
+end
 local function getWoodSections(log)
     local s = {}
-    for _, c in ipairs(log:GetDescendants()) do if c:IsA("BasePart") and c.Name == "WoodSection" then s[#s+1] = c end end
-    if #s == 0 then local p = log:FindFirstChildWhichIsA("BasePart") if p then s[1] = p end end
+    for _, c in ipairs(log:GetDescendants()) do
+        if c:IsA("BasePart") and c.Name == "WoodSection" then s[#s+1] = c end
+    end
+    if #s == 0 then
+        local p = log:FindFirstChildWhichIsA("BasePart")
+        if p then s[1] = p end
+    end
     return s
 end
 local function getModlMass(model)
     local total, sections = 0, 0
-    for _, v in next, model:GetDescendants() do if v:IsA("BasePart") and v.Name ~= "Leaves" then if v.Name == "WoodSection" then sections += 1 end total += v.Mass end end
+    for _, v in next, model:GetDescendants() do
+        if v:IsA("BasePart") and v.Name ~= "Leaves" then
+            if v.Name == "WoodSection" then sections += 1 end
+            total += v.Mass
+        end
+    end
     return total, sections
 end
 local function getTreeOfClass(clas)
@@ -612,7 +388,8 @@ local function getTreeOfClass(clas)
         if region.Name == "TreeRegion" then
             for _, tree in next, region:GetChildren() do
                 if tree:IsA("Model") and tree:FindFirstChild("CutEvent") then
-                    local tc = tree:FindFirstChild("TreeClass") local ow = tree:FindFirstChild("Owner")
+                    local tc = tree:FindFirstChild("TreeClass")
+                    local ow = tree:FindFirstChild("Owner")
                     if ow and tc and ow.Value == nil and tc.Value == clas then
                         local mass, secs = getModlMass(tree)
                         if secs > 1 then list[#list+1] = {tre = tree, mass = mass} end
@@ -627,29 +404,55 @@ end
 local function hahaRootJoint()
     local char = LocalPlayer.Character
     if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart") if not hrp then return end
-    local rj = hrp:FindFirstChild("RootJoint") if not rj then return end
-    pcall(function() rj:Clone().Parent = rj.Parent rj:Destroy() end)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local rj = hrp:FindFirstChild("RootJoint")
+    if not rj then return end
+    pcall(function()
+        rj:Clone().Parent = rj.Parent
+        rj:Destroy()
+    end)
     task.wait()
 end
 local function getBestAxe(woodType)
     local list = {}
-    for _, a in next, LocalPlayer.Backpack:GetChildren() do if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then local s = getAxStats(a.ToolName.Value, woodType) if s then list[#list+1] = {ax = a, stats = s} end end end
+    for _, a in next, LocalPlayer.Backpack:GetChildren() do
+        if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then
+            local s = getAxStats(a.ToolName.Value, woodType)
+            if s then list[#list+1] = {ax = a, stats = s} end
+        end
+    end
     local char = LocalPlayer.Character
-    if char then for _, a in next, char:GetChildren() do if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then local s = getAxStats(a.ToolName.Value, woodType) if s then list[#list+1] = {ax = a, stats = s} end end end end
+    if char then
+        for _, a in next, char:GetChildren() do
+            if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then
+                local s = getAxStats(a.ToolName.Value, woodType)
+                if s then list[#list+1] = {ax = a, stats = s} end
+            end
+        end
+    end
     if #list == 0 then return nil, nil end
     table.sort(list, function(a,b) return a.stats.Damage > b.stats.Damage end)
     return list[1].ax, list[1].stats
 end
 local function getAnyAxe()
-    for _, a in next, LocalPlayer.Backpack:GetChildren() do if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end end
+    for _, a in next, LocalPlayer.Backpack:GetChildren() do
+        if a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end
+    end
     local char = LocalPlayer.Character
-    if char then for _, a in next, char:GetChildren() do if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end end end
+    if char then
+        for _, a in next, char:GetChildren() do
+            if a:IsA("Tool") and a.Name ~= "BlueprintTool" and a:FindFirstChild("ToolName") then return a end
+        end
+    end
 end
 local function fireCut(tree, ax, stats)
     if not (tree and ax and stats) then return end
     if not tree.Parent or not tree:FindFirstChild("CutEvent") then return end
-    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, { tool = ax, height = 0.3, faceVector = Vector3.new(1,0,0), sectionId = 1, hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe" })
+    ReplicatedStorage.Interaction.RemoteProxy:FireServer(tree.CutEvent, {
+        tool = ax, height = 0.3, faceVector = Vector3.new(1,0,0), sectionId = 1,
+        hitPoints = stats.Damage, cooldown = stats.SwingCooldown, cuttingClass = "Axe",
+    })
 end
 local function dragLogTo(log, targetCF, frames)
     frames = frames or 90
@@ -660,8 +463,15 @@ local function dragLogTo(log, targetCF, frames)
         local ws = log:FindFirstChild("WoodSection") or log:FindFirstChildWhichIsA("BasePart")
         if ws then
             local diff = targetCF.Position - ws.Position
-            if diff.Magnitude > 0.5 then for _, p in ipairs(log:GetDescendants()) do if p:IsA("BasePart") then pcall(function() p.CFrame = p.CFrame + diff end) end end end
-            if lastPos and (ws.Position - lastPos).Magnitude < 0.1 then stuck += 1 if stuck > 30 then break end else stuck = 0 end
+            if diff.Magnitude > 0.5 then
+                for _, p in ipairs(log:GetDescendants()) do
+                    if p:IsA("BasePart") then pcall(function() p.CFrame = p.CFrame + diff end) end
+                end
+            end
+            if lastPos and (ws.Position - lastPos).Magnitude < 0.1 then
+                stuck += 1
+                if stuck > 30 then break end
+            else stuck = 0 end
             lastPos = ws.Position
         end
         ReplicatedStorage.Interaction.ClientIsDragging:FireServer(log)
@@ -675,7 +485,12 @@ local function treeStandCF(tree)
 end
 local function bringAllLoose()
     local n = 0
-    for _, log in pairs(workspace.LogModels:GetChildren()) do if log.Name:sub(1,6) == "Loose_" and log:FindFirstChild("Owner") and log.Owner.Value == LocalPlayer then log:MoveTo(LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0,10,0)) n += 1 end end
+    for _, log in pairs(workspace.LogModels:GetChildren()) do
+        if log.Name:sub(1,6) == "Loose_" and log:FindFirstChild("Owner") and log.Owner.Value == LocalPlayer then
+            log:MoveTo(LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0,10,0))
+            n += 1
+        end
+    end
     notify("Wood", "Brought " .. n .. " logs")
 end
 
@@ -689,14 +504,28 @@ local function sellOne(log)
             local drag = ReplicatedStorage.Interaction.ClientIsDragging
             local sections = getWoodSections(log)
             if #sections == 0 then return end
-            drag:FireServer(log) task.wait() drag:FireServer(log) task.wait() drag:FireServer(log) task.wait()
+            drag:FireServer(log) task.wait()
+            drag:FireServer(log) task.wait()
+            drag:FireServer(log) task.wait()
             local frames, snaps = 0, 0
             while frames < 60 and log.Parent and _G.MasterActive do
-                for _, ws in ipairs(sections) do if ws.Parent then ws.CFrame = SELL_CF end end
-                drag:FireServer(log) task.wait()
+                for _, ws in ipairs(sections) do
+                    if ws.Parent then ws.CFrame = SELL_CF end
+                end
+                drag:FireServer(log)
+                task.wait()
                 local still = true
-                for _, ws in ipairs(sections) do if ws.Parent and (ws.Position - SELL_CF.Position).Magnitude > 4 then still = false break end end
-                if not still then snaps += 1 drag:FireServer(log) task.wait() drag:FireServer(log) task.wait() if snaps > 10 then break end else snaps = 0 end
+                for _, ws in ipairs(sections) do
+                    if ws.Parent and (ws.Position - SELL_CF.Position).Magnitude > 4 then
+                        still = false break
+                    end
+                end
+                if not still then
+                    snaps += 1
+                    drag:FireServer(log) task.wait()
+                    drag:FireServer(log) task.wait()
+                    if snaps > 10 then break end
+                else snaps = 0 end
                 frames += 1
             end
             drag:FireServer(log)
@@ -708,15 +537,22 @@ local function sellEverything(silent)
     local queued = 0
     for _, log in ipairs(workspace.LogModels:GetChildren()) do
         if sellInFlight >= MAX_SELL then break end
-        if isMyLog(log) then sellOne(log) queued += 1 end
+        if isMyLog(log) then
+            sellOne(log)
+            queued += 1
+        end
     end
-    if not silent then notify("Sell", "Processing " .. queued .. " logs") end
+    if not silent then notify("Sell", "Processing " .. queued .. " logs", 2) end
     return queued
 end
 local function lonecaveTree()
     for _, region in ipairs(workspace:GetChildren()) do
         if region.Name == "TreeRegion" then
-            for _, m in ipairs(region:GetChildren()) do if m:IsA("Model") and m:FindFirstChild("CutEvent") and m:FindFirstChild("TreeClass") and m.TreeClass.Value == "LoneCave" and m:FindFirstChild("Owner") and m.Owner.Value == nil then return m end end
+            for _, m in ipairs(region:GetChildren()) do
+                if m:IsA("Model") and m:FindFirstChild("CutEvent") and m:FindFirstChild("TreeClass")
+                    and m.TreeClass.Value == "LoneCave"
+                    and m:FindFirstChild("Owner") and m.Owner.Value == nil then return m end
+            end
         end
     end
 end
@@ -734,294 +570,295 @@ local function bringWood(woodType)
     if not ax then return false, "Pick up an axe" end
     if not stats then return false, "No axe stats" end
     local isLone = woodType == "LoneCave"
-    if isLone then if ax.ToolName.Value ~= "EndTimesAxe" then return false, "Need EndTimesAxe" end hahaRootJoint() end
+    if isLone then
+        if ax.ToolName.Value ~= "EndTimesAxe" then return false, "Need EndTimesAxe" end
+        hahaRootJoint()
+    end
     notify("Wood", "Bringing " .. woodType .. "...")
     local ws = tre:FindFirstChild("WoodSection") or tre:FindFirstChildWhichIsA("BasePart")
     local targetPos = ws and (ws.Position + Vector3.new(5,3,0)) or (tre:GetPivot().Position + Vector3.new(5,3,0))
     local loptp
-    if not isLone then loptp = RunService.Heartbeat:Connect(function() local c = LocalPlayer.Character local r = c and c:FindFirstChild("HumanoidRootPart") if r and tre.Parent then r.CFrame = CFrame.new(targetPos) end end)
+    if not isLone then
+        loptp = RunService.Heartbeat:Connect(function()
+            local c = LocalPlayer.Character
+            local r = c and c:FindFirstChild("HumanoidRootPart")
+            if r and tre.Parent then r.CFrame = CFrame.new(targetPos) end
+        end)
     else hrp.CFrame = CFrame.new(targetPos) end
     task.wait(0.25)
     local newLog
-    local logConn = workspace.LogModels.ChildAdded:Connect(function(l) task.wait() local o = l:FindFirstChild("Owner") if o and o.Value == LocalPlayer then newLog = l end end)
+    local logConn = workspace.LogModels.ChildAdded:Connect(function(l)
+        task.wait()
+        local o = l:FindFirstChild("Owner")
+        if o and o.Value == LocalPlayer then newLog = l end
+    end)
     local t0 = tick()
     repeat
         if not tre.Parent or _G.AbortAction or tick() - t0 > 60 then break end
         fireCut(tre, ax, stats)
         task.wait(stats.SwingCooldown)
     until newLog ~= nil
-    logConn:Disconnect() if loptp then loptp:Disconnect() end
-    if not newLog then local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if r and not isLone then r.CFrame = curpos end return false, "No log" end
+    logConn:Disconnect()
+    if loptp then loptp:Disconnect() end
+    if not newLog then
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if r and not isLone then r.CFrame = curpos end
+        return false, "No log"
+    end
     task.wait(0.15)
-    task.spawn(function() for _ = 1, 60 do ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog) task.wait() end end)
+    task.spawn(function()
+        for _ = 1, 60 do
+            ReplicatedStorage.Interaction.ClientIsDragging:FireServer(newLog)
+            task.wait()
+        end
+    end)
     task.wait(0.1)
-    local wp = newLog:FindFirstChild("WoodSection") if wp then newLog.PrimaryPart = wp end
-    if newLog.PrimaryPart then for _ = 1, 60 do if _G.AbortAction then break end pcall(function() newLog.PrimaryPart.Velocity = Vector3.zero newLog:PivotTo(curpos) end) task.wait() end end
+    local wp = newLog:FindFirstChild("WoodSection")
+    if wp then newLog.PrimaryPart = wp end
+    if newLog.PrimaryPart then
+        for _ = 1, 60 do
+            if _G.AbortAction then break end
+            pcall(function()
+                newLog.PrimaryPart.Velocity = Vector3.zero
+                newLog:PivotTo(curpos)
+            end)
+            task.wait()
+        end
+    end
     if isLone then
         local ch = LocalPlayer.Character
-        if ch then local h = ch:FindFirstChildOfClass("Humanoid") if h then pcall(function() h:UnequipTools() end) end task.wait() local head = ch:FindFirstChild("Head") if head then head:Destroy() end end
-        LocalPlayer.CharacterAdded:Wait() task.wait(1.5)
-        local nh = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") local wp2 = newLog:FindFirstChild("WoodSection")
-        if nh and wp2 then nh.CFrame = wp2.CFrame end return true, "Brought"
+        if ch then
+            local h = ch:FindFirstChildOfClass("Humanoid")
+            if h then pcall(function() h:UnequipTools() end) end
+            task.wait()
+            local head = ch:FindFirstChild("Head")
+            if head then head:Destroy() end
+        end
+        LocalPlayer.CharacterAdded:Wait()
+        task.wait(1.5)
+        local nh = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local wp2 = newLog:FindFirstChild("WoodSection")
+        if nh and wp2 then nh.CFrame = wp2.CFrame end
+        return true, "Brought"
     end
-    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if r then r.CFrame = curpos end
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then r.CFrame = curpos end
     notify("Wood", woodType .. " brought")
     return true, "Brought"
 end
 
-do local T = UI.Home
-    AddButton(T, "Load RTX Graphics", function() loadstring(game:HttpGet("https://pastebin.com/raw/kH90gD5d"))() end)
-    AddButton(T, "Infinite Yield", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
-    AddButton(T, "Nameless Admin", function() local u="https://ltseverydayyou.gitlab.io/Nameless-Admin/Source.lua";local c="NA-split-gitlab/Source.lua";local o,s=pcall(game.HttpGet,game,u);local f,e;if o and type(s)=="string" and s~="" then f,e=loadstring(s);if f and type(writefile)=="function" then if type(makefolder)=="function" then pcall(makefolder,"NA-split-gitlab") end;pcall(writefile,c,s) end end;if not f and type(readfile)=="function" then local r,x=pcall(readfile,c);if r and type(x)=="string" and x~="" then f,e=loadstring(x) end end;assert(f,e or "unavailable");f() end)
-    AddButton(T, "Rejoin Server", function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
-    AddButton(T, "Copy Server Link", function() setclipboard("roblox://experiences/start?placeId=" .. game.PlaceId .. "&gameInstanceId=" .. game.JobId) notify("Copied", "Server link copied") end)
-    AddButton(T, "Bring All Loose Wood", bringAllLoose)
-    AddButton(T, "Sell Everything", function() sellEverything(false) end)
-    local lc = AddParagraph(T, "Lonecave Tree: Checking...")
-    task.spawn(function() while _G.MasterActive do pcall(function() lc.Set("Lonecave Tree: " .. (lonecaveTree() and "ON SERVER" or "Not found")) end) task.wait(5) end end)
-    AddToggle(T, "View Lonecave", false, function(s) local cam = workspace.CurrentCamera if s then local t = lonecaveTree() local p = t and (t:FindFirstChild("WoodSection") or t:FindFirstChildWhichIsA("BasePart")) if p then cam.CameraSubject = p else notify("Lonecave", "Not found") end else local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then cam.CameraSubject = hum end end end)
-    AddButton(T, "Destroy Hub", function() _G.MasterActive = false _G.AbortAction = true stopFly() stopVehFly() disconnectAll() clearPlayerESP() clearItemESP() ScreenGui:Destroy() end)
-end
+Tabs.Home:AddButton({Title = "Load RTX Graphics", Callback = function()
+    loadstring(game:HttpGet("https://pastebin.com/raw/kH90gD5d"))()
+end})
+Tabs.Home:AddButton({Title = "Infinite Yield", Callback = function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+end})
+Tabs.Home:AddButton({Title = "Nameless Admin", Callback = function()
+    local u="https://ltseverydayyou.gitlab.io/Nameless-Admin/Source.lua";local c="NA-split-gitlab/Source.lua";local o,s=pcall(game.HttpGet,game,u);local f,e;if o and type(s)=="string" and s~="" then f,e=loadstring(s);if f and type(writefile)=="function" then if type(makefolder)=="function" then pcall(makefolder,"NA-split-gitlab") end;pcall(writefile,c,s) end end;if not f and type(readfile)=="function" then local r,x=pcall(readfile,c);if r and type(x)=="string" and x~="" then f,e=loadstring(x) end end;assert(f,e or "Nameless Admin loader unavailable and no local cache exists");f()
+end})
+Tabs.Home:AddButton({Title = "Rejoin Server", Callback = function()
+    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end})
+Tabs.Home:AddButton({Title = "Copy Server Link", Callback = function()
+    setclipboard("roblox://experiences/start?placeId=" .. game.PlaceId .. "&gameInstanceId=" .. game.JobId)
+    notify("Copied", "Server link copied")
+end})
+Tabs.Home:AddButton({Title = "Bring All Loose Wood", Callback = bringAllLoose})
+Tabs.Home:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
+Tabs.Home:AddButton({Title = "Destroy Hub", Callback = function()
+    _G.MasterActive = false
+    _G.AbortAction = true
+    _G.GH_STOP = true
+    _G.Flying = false
+    _G.Noclip = false
+    _G.InfJump = false
+    _G.ESPToggled = false
+    _G.FullBright = false
+    vehFlyOn = false
+    vehSpeedOn = false
+    stopFly()
+    stopVehFly()
+    disconnectAll()
+    dc(draggerConn) dc(autoRejoinConn) dc(ultraConn)
+    draggerConn, autoRejoinConn, ultraConn = nil, nil, nil
+    clearPlayerESP()
+    clearItemESP()
+    local og = LocalPlayer.PlayerGui:FindFirstChild("GreenHubOnScreen")
+    if og then og:Destroy() end
+    local g = LocalPlayer.PlayerGui:FindFirstChild("GreenHubToggle")
+        or game:GetService("CoreGui"):FindFirstChild("GreenHubToggle")
+    if g then g:Destroy() end
+    Fluent:Destroy()
+end})
+
+local lonecaveLabel = Tabs.Home:AddParagraph({Title = "Lonecave Tree", Content = "Checking..."})
+task.spawn(function()
+    while _G.MasterActive do
+        pcall(function()
+            lonecaveLabel:SetDesc(lonecaveTree() and "ON SERVER" or "Not found")
+        end)
+        task.wait(5)
+    end
+end)
+
+Tabs.Home:AddToggle("ViewLonecave", {
+    Title = "View Lonecave", Default = false,
+    Callback = function(s)
+        local cam = workspace.CurrentCamera
+        if s then
+            local t = lonecaveTree()
+            local p = t and (t:FindFirstChild("WoodSection") or t:FindFirstChildWhichIsA("BasePart"))
+            if p then cam.CameraSubject = p
+            else notify("Lonecave", "Lonecave tree not found", 3) end
+        else
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then cam.CameraSubject = hum end
+        end
+    end,
+})
 
 local woodNames = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","Gold","Koa","Palm","CaveCrawler","SnowGlow","Zombie","BlueSpruce"}
-local woodMap = {Generic="Generic",Oak="Oak",Birch="Birch",Cherry="Cherry",Walnut="Walnut",Fir="Fir",Pine="Pine",Maple="Maple",Volcano="Volcano",Frost="Frost",Gold="GoldSwampy",Koa="Koa",Palm="Palm",CaveCrawler="CaveCrawler",SnowGlow="SnowGlow",Zombie="GreenSwampy",BlueSpruce="BlueSpruce"}
-do local T = UI.Wood
-    local wd = AddDropdown(T, "Wood Type", woodNames, 1)
-    local amt = AddSlider(T, "Amount", 1, 30, 1)
-    AddButton(T, "Bring Selected Wood", function() _G.AbortAction = false task.spawn(function() for _ = 1, amt.Value do if _G.AbortAction then break end local ok, msg = bringWood(woodMap[wd.Value]) if not ok then notify("Wood", msg) break end task.wait(0.5) end end) end)
-    AddButton(T, "Abort", function() _G.AbortAction = true notify("Wood", "Aborting") end)
-    AddButton(T, "Bring All Loose", bringAllLoose)
-    AddButton(T, "Sell Everything", function() sellEverything(false) end)
-end
+local woodMap = {Generic = "Generic", Oak = "Oak", Birch = "Birch", Cherry = "Cherry", Walnut = "Walnut", Fir = "Fir", Pine = "Pine", Maple = "Maple", Volcano = "Volcano", Frost = "Frost", Gold = "GoldSwampy", Koa = "Koa", Palm = "Palm", CaveCrawler = "CaveCrawler", SnowGlow = "SnowGlow", Zombie = "GreenSwampy", BlueSpruce = "BlueSpruce"}
+local selectedWood, woodAmount = "Generic", 1
 
-do local T = UI.Farm
-    local wd = AddDropdown(T, "Target Wood", {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"}, 1)
-    local st = AddParagraph(T, "Status: OFF")
-    local active = false
-    AddToggle(T, "Auto Farm", false, function(s)
-        active = s if not s then st.Set("Status: OFF") return end
-        task.spawn(function()
-            while active and _G.MasterActive do
-                pcall(function()
-                    local char = LocalPlayer.Character local hrp = char and char:FindFirstChild("HumanoidRootPart") if not hrp then return end
-                    local curpos = hrp.CFrame local target = getTreeOfClass(wd.Value) local ax, stats = getBestAxe(wd.Value)
-                    if not (target and ax and stats) then st.Set("No tree/axe") task.wait(2) return end
-                    st.Set("Cutting " .. wd.Value)
-                    local ws = target:FindFirstChild("WoodSection") or target:FindFirstChildWhichIsA("BasePart")
-                    local targetPos = ws and (ws.Position + Vector3.new(5,3,0)) or (target:GetPivot().Position + Vector3.new(5,3,0))
-                    local newLog
-                    local con = workspace.LogModels.ChildAdded:Connect(function(l) task.wait() local o = l:FindFirstChild("Owner") if o and o.Value == LocalPlayer then newLog = l end end)
-                    local lp = RunService.Heartbeat:Connect(function() local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if r and target.Parent then r.CFrame = CFrame.new(targetPos) end end)
-                    local timeout = 0
-                    repeat if not target.Parent then break end fireCut(target, ax, stats) task.wait(stats.SwingCooldown) timeout += stats.SwingCooldown until newLog ~= nil or timeout > 30 or not active
-                    lp:Disconnect() con:Disconnect() task.wait(0.2)
-                    if newLog then st.Set("Bringing") dragLogTo(newLog, curpos, 90) end
-                    hrp.CFrame = curpos st.Set("Selling") sellEverything(true)
-                    while sellInFlight > 0 and active and _G.MasterActive do task.wait(0.1) end
-                    task.wait(1) st.Set("Farming " .. wd.Value)
-                end)
-            end
-            st.Set("Status: OFF")
-        end)
+Tabs.Wood:AddButton({Title = "Bring Selected Wood", Callback = function()
+    _G.AbortAction = false
+    task.spawn(function()
+        for _ = 1, woodAmount do
+            if _G.AbortAction then break end
+            local ok, msg = bringWood(woodMap[selectedWood])
+            if not ok then notify("Wood", msg, 3) break end
+            task.wait(0.5)
+        end
     end)
-end
-
-do local T = UI.Player
-    AddSlider(T, "WalkSpeed", 16, 400, 16, function(v) _G.WalkSpeed = v end)
-    AddSlider(T, "JumpPower", 50, 300, 50, function(v) _G.JumpPower = v end)
-    AddSlider(T, "Fly Speed", 10, 500, 60, function(v) _G.FlySpeed = v end)
-    AddToggle(T, "Apply Walk/Jump Values", true, function(s) if not s then local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end end end)
-    AddToggle(T, "Noclip", false, function(s) _G.Noclip = s end)
-    AddToggle(T, "Fly", false, function(s) SetFly(s) end)
-    AddToggle(T, "Inf Jump", false, function(s) _G.InfJump = s end)
-    AddToggle(T, "Fullbright", false, function(s) _G.FullBright = s end)
-    AddToggle(T, "Anti AFK", true, function(s) _G.AntiAFK = s end)
-    AddToggle(T, "Hard Dragger", false, function(s)
-        if s then if draggerConn then return end draggerConn = workspace.ChildAdded:Connect(function(obj) if obj.Name ~= "Dragger" then return end local BG = obj:WaitForChild("BodyGyro", 2) local BP = obj:WaitForChild("BodyPosition", 2) if not (BG and BP) then return end repeat BP.P = 80000 BP.D = 1000 BP.MaxForce = Vector3.new(1,1,1) * 1000000 BG.MaxTorque = Vector3.new(1,1,1) * 200 BG.P = 1200 BG.D = 140 task.wait() until not workspace:FindFirstChild("Dragger") end)
-        else dc(draggerConn) draggerConn = nil end
-    end)
-    AddButton(T, "Long Wire", function() for _, info in ipairs(ReplicatedStorage.ClientItemInfo:GetChildren()) do pcall(function() if info.ItemName.Value == "Wire" then info.OtherInfo.MaxLength.Value = 60 end end) end end)
-    AddButton(T, "Safe Suicide", function() local char = LocalPlayer.Character if char then char:PivotTo(CFrame.new(3392, -397, -3389)) end end)
-    AddButton(T, "Reset Character", function() local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.Health = 0 end end)
-    AddButton(T, "Sit Down", function() local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.Sit = true end end)
-end
-
-local locData = {{"Wood R Us", CFrame.new(264,3,57)},{"Land Store", CFrame.new(293.064,3.200,-99.010)},{"Links Logic", CFrame.new(4608.162,7.001,-783.934)},{"Volcano", CFrame.new(-1585,625,1140)},{"Swamp", CFrame.new(-1209,138,-801)},{"Cave", CFrame.new(3581,-177,430)},{"Palm Island", CFrame.new(2549,5,-42)},{"Fancy Furnishings", CFrame.new(491,13,-1720)},{"Boxed Cars", CFrame.new(509,5,-1463)},{"Fine Arts Shop", CFrame.new(5207,-156,719)},{"Bob's Shack", CFrame.new(260,10,-2542)},{"The Den", CFrame.new(323,49,1930)},{"Shrine of Sight", CFrame.new(-1600,205,919)},{"Ski Lodge", CFrame.new(1244,66,2306)},{"Strange Man", CFrame.new(1061,20,1131)},{"End Times", CFrame.new(113,-204,-951)},{"Spawn", CFrame.new(0,5,0)}}
-local locNames, locCF = {}, {}
-for _, d in ipairs(locData) do locNames[#locNames+1] = d[1] locCF[d[1]] = d[2] end
-local function getPlayerNames() local n = {} for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer then n[#n+1] = plr.Name end end return n end
-do local T = UI.Teleport
-    local locD = AddDropdown(T, "Location", locNames, 1)
-    AddButton(T, "TP To Location", function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if hrp and locCF[locD.Value] then hrp.CFrame = locCF[locD.Value] notify("Teleport", "Teleported") end end)
-    local pD = AddDropdown(T, "Player", getPlayerNames(), 1)
-    track(Players.PlayerAdded:Connect(function() task.wait(0.5) pD.Values = getPlayerNames() end))
-    track(Players.PlayerRemoving:Connect(function() task.wait(0.1) pD.Values = getPlayerNames() end))
-    local function sel() local plr = Players:FindFirstChild(pD.Value) if not plr then notify("Teleport", "No player") end return plr end
-    AddButton(T, "TP To Selected Player", function() local plr = sel() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") local tgt = plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") if hrp and tgt then hrp.CFrame = tgt.CFrame + Vector3.new(3,0,0) notify("Teleport", "Teleported") end end)
-    AddButton(T, "TP To Selected Player's Base", function() local plr = sel() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not (plr and hrp) then return end local base for _, obj in ipairs(workspace:GetDescendants()) do if obj.Name == "Owner" and obj.Value == plr then local plot = obj.Parent local part = plot and (plot.PrimaryPart or plot:FindFirstChildWhichIsA("BasePart")) if part then base = part break end end end if base then hrp.CFrame = CFrame.new(base.Position + Vector3.new(0,5,0)) notify("Teleport", "Teleported") else notify("Teleport", "Base not found") end end)
-    AddButton(T, "TP To Nearest Player", function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not hrp then return end local nearest, dist = nil, math.huge for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer and plr.Character then local o = plr.Character:FindFirstChild("HumanoidRootPart") if o then local d = (o.Position - hrp.Position).Magnitude if d < dist then nearest, dist = o, d end end end end if nearest then hrp.CFrame = nearest.CFrame + Vector3.new(3,0,0) notify("Teleport", "Teleported") end end)
-end
-
-local ClientItemInfo = ReplicatedStorage:WaitForChild("ClientItemInfo")
-local NPCDialog = ReplicatedStorage:WaitForChild("NPCDialog")
-local storeIds
-local function loadStoreIds()
-    if storeIds then return storeIds end
-    local ids, count = {}, 0
-    local conn = NPCDialog.PromptChat.OnClientEvent:Connect(function(_, npc) if not ids[npc.Name] then ids[npc.Name] = npc.ID count += 1 end end)
-    NPCDialog.SetChattingValue:InvokeServer(1) local t = tick() repeat task.wait() until count >= 12 or tick() - t > 10
-    conn:Disconnect() NPCDialog.SetChattingValue:InvokeServer(0) if next(ids) then storeIds = ids end return ids
-end
-local function getFolder(n) for _, f in ipairs(ClientItemInfo:GetChildren()) do if (f:FindFirstChild("ItemName") and f.ItemName.Value == n) or f.Name == n then return f end end end
-local function findStoreItem(n) for _, m in ipairs(workspace.Stores:GetChildren()) do if m.Name == "ShopItems" then for _, item in ipairs(m:GetChildren()) do if item:FindFirstChild("Owner") and item.Owner.Value == nil and item:FindFirstChild("BoxItemName") and item.BoxItemName.Value == n then return item end end end end end
-local function findCounter(item) local best, bestDist = nil, math.huge for _, store in ipairs(workspace.Stores:GetChildren()) do local c = store:FindFirstChild("Counter") if c then local d = (c.Position - item.Main.Position).Magnitude if d < bestDist then best, bestDist = c, d end end end return best end
-local function dragTo(model, cf, frames) frames = frames or 45 for _ = 1, frames do if _G.AbortAction or not model.Parent then break end ReplicatedStorage.Interaction.ClientIsDragging:FireServer(model) model:PivotTo(cf) task.wait() end end
-local function buyOne(name)
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not hrp then return false end
-    local folder = getFolder(name) local item = findStoreItem(folder and folder.Name or name) if not item then notify("Buy", "No " .. name .. " in stock") return false end
-    local counter = findCounter(item) if not counter then notify("Buy", "Counter not found") return false end
-    local startCF = hrp.CFrame local ids = loadStoreIds() local npcName
-    for _, p in ipairs(counter.Parent:GetDescendants()) do if p.Name == "Head" and p.Parent and p.Parent:IsA("Model") then npcName = p.Parent break end end
-    hrp.CFrame = item.Main.CFrame + Vector3.new(5,3,5) task.wait(0.5)
-    local bought
-    local conn = workspace.PlayerModels.ChildAdded:Connect(function(obj) local owner = obj:WaitForChild("Owner", 1) local itemName = obj:WaitForChild("ItemName", 1) local purchased = obj:WaitForChild("PurchasedBoxItemName", 1) if owner and owner.Value == LocalPlayer and folder and ((itemName and itemName.Value == folder.Name) or (purchased and purchased.Value == folder.Name)) then bought = obj end end)
-    dragTo(item, counter.CFrame + Vector3.new(0, counter.Size.Y * item.Main.Size.Y / 2, 0), 45)
-    local tries = 0 repeat task.wait() tries += 1 if npcName and ids[npcName.Name] then pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = ids[npcName.Name]}, "ConfirmPurchase") end) end until bought or tries > 20 or _G.AbortAction
-    conn:Disconnect()
-    if bought then local bHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if bHrp then bHrp.CFrame = bought:GetPivot() + Vector3.new(0,5,0) task.wait(0.2) end dragTo(bought, startCF, 30) notify("Buy", "Bought " .. name) else notify("Buy", "Purchase failed") end
-    hrp.CFrame = startCF return bought ~= nil
-end
-local catTools = {"BasicHatchet","Axe1","Axe2","Axe3","SilverAxe"}
-local catWire = {"Wire","Lever0","Button0","ChopSaw","PressurePlate","SignalSustain","Laser","LaserReceiver","Hatch","GateNOT","GateOR","GateAND","GateXOR","WoodChecker","SignalDelay","NeonWireRed","NeonWireOrange","NeonWireYellow","NeonWireGreen","NeonWireCyan","NeonWireBlue","NeonWireViolet","NeonWireWhite","NeonWirePinky","IcicleWireAmber","IcicleWireRed","IcicleWireGreen","IcicleWireBlue","IcicleWireMagenta","FireworkLauncher","IcicleWireHalloween"}
-local catOther = {"BagOfSand","CanOfWorms","LightBulb","Dynamite"}
-local catVehicles = {"UtilityTruck","UtilityTruck2","SmallTrailer","Pickup1","Trailer2","Sleigh"}
-local catOtherRest = {"PropertySignSold","WorkLight","PumpkinClassic","BlueBaii","Bobblehead","Spork","CoalLump","RedBall","PumpkinDark","Skull","Eye1","Turkey","Bobblehead2","B1","BlueBall","PumpkinGreen","Turkey2","Bobblehead3","GreenBall","Bobblehead4","Bobblehead5","PumpkinCursed","CanOfCranberry","BagOfCandy","Candy","Turkey3","SnowBall","Plate","Cocoa","CandyCane","Duck","Cone","Toboggan","Scoobis","PlumBall","YellowBall"}
-local catStructures = {"Wall2Tall","Door1","Door2","Floor2","Floor1Small","Post","Wedge10","Wall3Tall","Wall1Tall","Wall1","Wall1Short","Wall2","Wall2Short","Wall1TallCorner","Wall1Corner","Wall1ShortCorner","Wall1Thin","Wall1TallThin","Wall1ShortThin","Wall2TallThin","Wall2Thin","Wall2ShortThin","Wall2TallCorner","Wall2Corner","Wall2ShortCorner","Wall3Thin","Wall3TallThin","Wall3Corner","Wall3TallCorner","Floor1Large","Floor1","Floor2Large","Floor2Small","Stair1","Stair2","Wedge1_Thin","Wedge9_Thin","Wedge4_Thin","Wedge7_Thin","Chair1","Table1","Table2","Ladder1","Cabinet1Thin","Cabinet1","Cabinet1CornerTight","Cabinet1CornerWide","CounterTop1Thin","CounterTop1","CounterTop1Sink","Floor2Tiny","Floor1Tiny","Wedge1","Wedge2","Wedge3","Wedge4","Wedge8","Wedge7","Wedge6","Wedge2_Thin","Wedge3_Thin","Wedge10_Thin","Wedge9","Wedge6_Thin","Wedge8_Thin","Wedge5","Wedge5_Thin","Wall3"}
-local function joinLists(...) local o = {} for _, list in ipairs({...}) do for _, v in ipairs(list) do o[#o+1] = v end end return o end
-local defaultBuyList = joinLists(catTools, catWire, catOther, catVehicles)
-local fullBuyList = joinLists(catTools, catWire, catOther, catVehicles, catOtherRest, catStructures)
-do local T = UI.Autobuy
-    local wd = AddDropdown(T, "Item", defaultBuyList, 1)
-    AddButton(T, "Load full item list", function() wd.Values = fullBuyList notify("Buy", "List loaded") end)
-    local amt = AddSlider(T, "Amount", 1, 30, 1)
-    AddButton(T, "Buy Selected", function() _G.AbortAction = false task.spawn(function() for _ = 1, amt.Value do if _G.AbortAction or not buyOne(wd.Value) then break end end end) end)
-    AddButton(T, "Abort", function() _G.AbortAction = true notify("Buy", "Aborting") end)
-    AddButton(T, "Buy All Blueprints", function() _G.AbortAction = false task.spawn(function() for _, n in ipairs(catStructures) do if _G.AbortAction then break end buyOne(n) end notify("Blueprints", "Done") end) end)
-    local sId = AddDropdown(T, "Service", {"Bridge","Ferry","Power"}, 1)
-    AddButton(T, "Buy Service", function() local ids = {Bridge=14, Ferry=13, Power=5} local id = ids[sId.Value] if id then local ok, err = pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = id}, "ConfirmPurchase") end) notify("Service", ok and "Sent" or "Failed") end end)
-end
-
-do local T = UI.Vehicle
-    local speed = AddDropdown(T, "Vehicle Speed", {"1","2","3","4","5","6"}, 1)
-    AddToggle(T, "Apply Vehicle Speed", false, function(s) vehSpeedOn = s end)
-    task.spawn(function() while _G.MasterActive do if vehSpeedOn then for _, v in ipairs(workspace.PlayerModels:GetChildren()) do if v:FindFirstChild("Type") and v.Type.Value == "Vehicle" and v:FindFirstChild("DriveSeat") then pcall(function() v.Configuration.MaxSpeed.Value = tonumber(speed.Value) or 1 end) end end end task.wait(0.5) end end)
-    AddToggle(T, "Vehicle Fly", false, function(s) vehFlyOn = s if s then if not startVehFly() then notify("Vehicle Fly", "Sit in a vehicle first") end else stopVehFly() end end)
-    AddButton(T, "Flip Vehicle", function() pcall(function() local char = LocalPlayer.Character char.Humanoid.SeatPart.Parent:PivotTo(CFrame.new(char.HumanoidRootPart.CFrame.p) + Vector3.new(0,5,0)) end) end)
-end
-
-local alwaysDay, alwaysNight = false, false
-track(RunService.Heartbeat:Connect(function() if alwaysDay then Lighting.ClockTime = 12 elseif alwaysNight then Lighting.ClockTime = 0 end end))
-local function changeWater(prop, val) pcall(function() for _, part in ipairs(workspace.Water:GetChildren()) do if part.Name == "Water" then part[prop] = val end end end) end
-local bridgeIsDown = false
-do local T = UI.World
-    AddToggle(T, "Always Day", false, function(s) alwaysDay = s if s then alwaysNight = false end end)
-    AddToggle(T, "Always Night", false, function(s) alwaysNight = s if s then alwaysDay = false end end)
-    AddToggle(T, "Shadows", true, function(s) Lighting.GlobalShadows = s end)
-    AddButton(T, "Remove Spooky Mode", function() for _, c in ipairs(Lighting:GetChildren()) do c:Destroy() end end)
-    AddToggle(T, "Bridge Down", false, function(s) if s == bridgeIsDown then return end bridgeIsDown = s pcall(function() for _, part in ipairs(workspace.Bridge.VerticalLiftBridge.Lift:GetChildren()) do part.Position = part.Position + Vector3.new(0, s and -26 or 26, 0) end end) end)
-    AddToggle(T, "Walk On Water", false, function(s) changeWater("CanCollide", s) end)
-    AddToggle(T, "Remove Water", false, function(s) changeWater("Transparency", s and 1 or 0) end)
-    local extraL = false
-    AddToggle(T, "Extra Supports", false, function(s) if s and not extraL then extraL = true pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/tASirLbL"))() end) elseif not s and extraL then notify("Supports", "Rejoin to remove") end end)
-    AddButton(T, "Get Green Box", function() pcall(function() workspace.Region_Volcano.VolcanoWin.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame end) end)
-end
-
-do local T = UI.Visuals
-    AddToggle(T, "Player ESP", false, function(s) _G.ESPToggled = s if s then updatePlayerESP() else clearPlayerESP() end end)
-    AddToggle(T, "Item ESP", false, function(s) itemESPOn = s if not s then clearItemESP() end end)
-    AddButton(T, "Remove Fog", function() Lighting.FogEnd = 100000 end)
-    AddButton(T, "Night Mode", function() Lighting.ClockTime = 0 Lighting.Brightness = 0.1 end)
-    AddButton(T, "Restore Lighting", function() Lighting.ClockTime = 14 Lighting.Brightness = 1 Lighting.FogEnd = 100000 Lighting.GlobalShadows = true Lighting.Ambient = Color3.fromRGB(70,70,70) end)
-end
-
-local autoChopOn = false
-local CHOP_RANGE = 80
-local MAX_AT_ONCE = 5
-do local T = UI["Auto Chop"]
-    local kd = AddDropdown(T, "Tree Kind", {"All","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"}, 1)
-    AddToggle(T, "Auto Chop", false, function(s)
-        autoChopOn = s if not s then return end
-        task.spawn(function()
-            while autoChopOn and _G.MasterActive do
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local ax = getAnyAxe()
-                if hrp and ax then
-                    local axName = ax.ToolName.Value
-                    local list = {}
-                    for _, region in ipairs(workspace:GetChildren()) do
-                        if region.Name == "TreeRegion" then
-                            for _, tree in ipairs(region:GetChildren()) do
-                                if tree:IsA("Model") and tree:FindFirstChild("CutEvent") and tree:FindFirstChild("TreeClass") and tree.TreeClass.Value ~= "LoneCave" then
-                                    local o = tree:FindFirstChild("Owner")
-                                    if not o or o.Value == nil or o.Value == LocalPlayer then
-                                        if kd.Value == "All" or tree.TreeClass.Value == kd.Value then
-                                            local d = (tree:GetPivot().Position - hrp.Position).Magnitude
-                                            if d <= CHOP_RANGE then table.insert(list, {tree = tree, dist = d}) end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    table.sort(list, function(a,b) return a.dist < b.dist end)
-                    for i = 1, math.min(MAX_AT_ONCE, #list) do
-                        local tree = list[i].tree
-                        local stats = getAxStats(axName, tree.TreeClass.Value)
-                        if stats then fireCut(tree, ax, stats) end
-                    end
-                end
-                task.wait(0.5)
-            end
-        end)
-    end)
-end
-
-do local T = UI.OnScreen
-    local items = {"Speed","NoclipToggle","FlyToggle","InfJumpToggle","FullBright","AntiAFK","HardDragger"}
-    for _, k in ipairs(items) do AddToggle(T, "Show " .. k .. " Button", false, function(s) end) end
-end
-
-do local T = UI.Automation
-    AddToggle(T, "Auto Sell", false, function(state)
-        if state then task.spawn(function() while _G.MasterActive do sellEverything(true) while sellInFlight > 0 and _G.MasterActive do task.wait(0.1) end task.wait(0.3) end end) end
-    end)
-    AddToggle(T, "Auto Rejoin On Kick", false, function(state)
-        if state and not autoRejoinConn then autoRejoinConn = LocalPlayer.CharacterRemoving:Connect(function() task.wait(3) if not LocalPlayer.Character then TeleportService:Teleport(game.PlaceId, LocalPlayer) end end) elseif not state then dc(autoRejoinConn) autoRejoinConn = nil end
-    end)
-end
+end})
+Tabs.Wood:AddButton({Title = "Abort", Callback = function()
+    _G.AbortAction = true
+    notify("Wood", "Aborting...", 2)
+end})
+Tabs.Wood:AddDropdown("WoodPick", {
+    Title = "Wood Type", Values = woodNames, Multi = false, Default = 1,
+    Callback = function(v) selectedWood = v end,
+})
+Tabs.Wood:AddSlider("WoodAmount", {
+    Title = "Amount", Default = 1, Min = 1, Max = 30, Rounding = 0,
+    Callback = function(v) woodAmount = v end,
+})
+Tabs.Wood:AddButton({Title = "Bring All Wood", Callback = bringAllLoose})
+Tabs.Wood:AddButton({Title = "Sell Everything", Callback = function() sellEverything(false) end})
 
 local SelectMode = false
 local selectedItems = {}
+
+local function toggleSelect(model)
+    if selectedItems[model] then
+        selectedItems[model]:Destroy()
+        selectedItems[model] = nil
+    else
+        local h = Instance.new("Highlight")
+        h.FillTransparency = 1
+        h.OutlineColor = Color3.fromRGB(0,255,255)
+        h.OutlineTransparency = 0
+        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        h.Adornee = model
+        h.Parent = model
+        selectedItems[model] = h
+    end
+end
+
+local function isBringable(m)
+    if m.Name:sub(1,6) == "Loose_" then return true end
+    if m:FindFirstChild("TreeClass") then return true end
+    if m:FindFirstChild("BoxItemName") then return true end
+    if m:FindFirstChild("PurchasedBoxItemName") then return true end
+    if m.Parent == workspace.PlayerModels and (m:FindFirstChild("Owner") or m:FindFirstChild("ItemName")) then return true end
+    return false
+end
+
+local function bringableModel(part)
+    local m = part and part:FindFirstAncestorOfClass("Model")
+    while m do
+        if isBringable(m) then return m end
+        m = m:FindFirstAncestorOfClass("Model")
+    end
+end
+
 track(LocalPlayer:GetMouse().Button1Down:Connect(function()
     if not SelectMode then return end
-    local part = LocalPlayer:GetMouse().Target
-    local m = part and part:FindFirstAncestorOfClass("Model")
-    while m do if m.Name:sub(1,6) == "Loose_" or m:FindFirstChild("TreeClass") or m:FindFirstChild("BoxItemName") or m:FindFirstChild("PurchasedBoxItemName") or (m.Parent == workspace.PlayerModels and (m:FindFirstChild("Owner") or m:FindFirstChild("ItemName"))) then
-        if selectedItems[m] then selectedItems[m]:Destroy() selectedItems[m] = nil else local h = Instance.new("Highlight", m) h.FillTransparency = 1 h.OutlineColor = C_ACCENT h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop selectedItems[m] = h end
-        break
-    end m = m:FindFirstAncestorOfClass("Model") end
+    local m = bringableModel(LocalPlayer:GetMouse().Target)
+    if m then toggleSelect(m) end
 end))
-do local T = UI.Bring
-    AddToggle(T, "Select Mode", false, function(s) SelectMode = s end)
-    AddButton(T, "Clear Selection", function() for m, h in pairs(selectedItems) do h:Destroy() selectedItems[m] = nil end end)
-    AddButton(T, "Bring Selected", function() task.spawn(function() local curpos = LocalPlayer.Character.HumanoidRootPart.CFrame for m, h in pairs(selectedItems) do dragLogTo(m, curpos, 90) h:Destroy() selectedItems[m] = nil end LocalPlayer.Character.HumanoidRootPart.CFrame = curpos notify("Bring", "Done") end) end)
-    local boxIn = AddDropdown(T, "Counter Shop", {"WoodRUs","LogicStore","CarStore","ShackShop","LandStore"}, 1)
-    AddButton(T, "Bring Box To Counter", function() local shop = workspace:FindFirstChild(boxIn.Value, true) local counter = shop and shop:FindFirstChild("Counter", true) local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not counter or not hrp then return end local target = counter.CFrame + Vector3.new(0,3,0) for _, m in pairs(workspace:GetChildren()) do if m.Name:sub(1,6) == "Loose_" and m:FindFirstChild("Owner") and m.Owner.Value == LocalPlayer then dragTo(m, target, 45) end end hrp.CFrame = curpos notify("Counter", "Done") end)
+
+Tabs.Bring:AddToggle("SelectMode", {
+    Title = "Select Mode", Default = false,
+    Callback = function(s) SelectMode = s end,
+})
+Tabs.Bring:AddButton({Title = "Clear Selection", Callback = function()
+    for m, h in pairs(selectedItems) do h:Destroy() selectedItems[m] = nil end
+end})
+Tabs.Bring:AddButton({Title = "Bring Selected", Callback = function()
+    task.spawn(function()
+        local curpos = LocalPlayer.Character.HumanoidRootPart.CFrame
+        for m, h in pairs(selectedItems) do
+            dragLogTo(m, curpos, 90)
+            h:Destroy()
+            selectedItems[m] = nil
+        end
+        LocalPlayer.Character.HumanoidRootPart.CFrame = curpos
+        notify("Bring", "Brought selected items")
+    end)
+end})
+
+local counterShop = "WoodRUs"
+local function getCounter(name)
+    local shop = workspace:FindFirstChild(name, true)
+    return shop and shop:FindFirstChild("Counter", true)
 end
+local function dragTo(model, cf, frames)
+    frames = frames or 45
+    for _ = 1, frames do
+        if _G.AbortAction or not model.Parent then break end
+        ReplicatedStorage.Interaction.ClientIsDragging:FireServer(model)
+        model:PivotTo(cf)
+        task.wait()
+    end
+end
+local function bringToCounter(model)
+    local counter = getCounter(counterShop)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not counter or not hrp or not model then
+        notify("Counter", "Counter or box not found in " .. counterShop, 3)
+        return
+    end
+    local curpos = hrp.CFrame
+    dragTo(model, counter.CFrame + Vector3.new(0,3,0), 45)
+    hrp.CFrame = curpos
+    notify("Counter", "Box moved to counter")
+end
+
+local boxName = ""
+Tabs.Bring:AddInput("BoxName", {
+    Title = "Box Name", Default = "", Placeholder = "Exact model name",
+    Numeric = false, Finished = true,
+    Callback = function(t) boxName = t end,
+})
+Tabs.Bring:AddDropdown("CounterShop", {
+    Title = "Counter Shop", Multi = false, Default = 1,
+    Values = {"WoodRUs","LogicStore","CarStore","ShackShop","LandStore"},
+    Callback = function(v) counterShop = v end,
+})
+Tabs.Bring:AddButton({Title = "Bring Box To Counter", Callback = function()
+    local m = boxName ~= "" and workspace:FindFirstChild(boxName, true)
+    if m and m:IsA("Model") then task.spawn(bringToCounter, m)
+    else notify("Counter", "No model named '" .. boxName .. "'", 3) end
+end})
 
 local SEARCH_FILE = "GreenHub_Search.txt"
 local HUB_URL = "https://raw.githubusercontent.com/let7829/Green-hub/refs/heads/main/Lumber%20Tycoon%202"
+local WALLHOP_SCRIPT = ""
+local searchTree = "LoneCave"
 local hopping = false
+
 local SEARCH_BODY = [=====[
 if not game:IsLoaded() then game.Loaded:Wait() end
 local C = _G.GH_CFG
@@ -1033,8 +870,21 @@ local LocalPlayer = Players.LocalPlayer
 local FILE = "GreenHub_Search.txt"
 local queued = false
 local function say(t, x) pcall(function() StarterGui:SetCore("SendNotification", {Title = t, Text = x, Duration = 4}) end) end
-local function findTree(class) for _, region in ipairs(workspace:GetChildren()) do if region.Name == "TreeRegion" then for _, m in ipairs(region:GetChildren()) do if m:FindFirstChild("TreeClass") and m.TreeClass.Value == class and (not m:FindFirstChild("Owner") or m.Owner.Value == nil) then return m end end end end end
-local function standCF(tree) local low, lowY = nil, math.huge for _, p in ipairs(tree:GetDescendants()) do if p:IsA("BasePart") and p.CanCollide and p.Position.Y < lowY then low, lowY = p, p.Position.Y end end if low then return CFrame.new(low.Position + Vector3.new(4,2,0)) end return CFrame.new(tree:GetPivot().Position + Vector3.new(5,3,0)) end
+local function findTree(class)
+    for _, region in ipairs(workspace:GetChildren()) do
+        if region.Name == "TreeRegion" then
+            for _, m in ipairs(region:GetChildren()) do
+                if m:FindFirstChild("TreeClass") and m.TreeClass.Value == class and (not m:FindFirstChild("Owner") or m.Owner.Value == nil) then return m end
+            end
+        end
+    end
+end
+local function standCF(tree)
+    local low, lowY = nil, math.huge
+    for _, p in ipairs(tree:GetDescendants()) do if p:IsA("BasePart") and p.CanCollide and p.Position.Y < lowY then low, lowY = p, p.Position.Y end end
+    if low then return CFrame.new(low.Position + Vector3.new(4,2,0)) end
+    return CFrame.new(tree:GetPivot().Position + Vector3.new(5,3,0))
+end
 local function hop()
     if not queue_on_teleport then return false end
     local ok, body = pcall(function() return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100") end)
@@ -1049,60 +899,962 @@ if not C.fromHub then local t = tick() repeat task.wait(0.1) until workspace:Fin
 while not _G.GH_STOP do
     local tree = findTree(C.tree)
     if tree then pcall(delfile, FILE) say("Green Hub", C.tree .. " tree found!") if C.tpTree then local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() local hrp = char:WaitForChild("HumanoidRootPart", 5) if hrp then hrp.CFrame = standCF(tree) end end if C.loadHub and not C.fromHub then loadstring(game:HttpGet(C.hubUrl))() end return end
-    say("Search", "No " .. C.tree .. " here, hopping...") if not hop() then say("Search", "No servers"); return end task.wait(10)
+    say("Search", "No " .. C.tree .. " here, hopping...") if not hop() then say("Search", "No servers or queue_on_teleport unavailable"); return end task.wait(10)
 end
 ]=====]
-local function stopSearch() hopping = false _G.GH_STOP = true pcall(delfile, SEARCH_FILE) end
+
+local function stopSearch()
+    hopping = false
+    _G.GH_STOP = true
+    pcall(delfile, SEARCH_FILE)
+end
 local function runSearch(class)
-    hopping = true _G.GH_STOP = false _G.GH_SRC = SEARCH_BODY
-    _G.GH_CFG = {tree=class, loadHub=Options.SearchLoadHub and Options.SearchLoadHub.Value or false, tpTree=Options.SearchTeleport and Options.SearchTeleport.Value or false, hubUrl=HUB_URL, wall="", fromHub=true}
-    task.spawn(function() local fn, err = loadstring(SEARCH_BODY) if not fn then notify("Search", "Error: " .. tostring(err)) hopping = false return end local ok, e = pcall(fn) if not ok then notify("Search", tostring(e)) end hopping = false end)
+    hopping = true
+    _G.GH_STOP = false
+    _G.GH_SRC = SEARCH_BODY
+    _G.GH_CFG = {tree = class, loadHub = Options.SearchLoadHub.Value, tpTree = Options.SearchTeleport.Value, hubUrl = HUB_URL, wall = WALLHOP_SCRIPT, fromHub = true}
+    task.spawn(function()
+        local fn, err = loadstring(SEARCH_BODY)
+        if not fn then notify("Search", "Script error: " .. tostring(err), 4) hopping = false return end
+        local ok, e = pcall(fn)
+        if not ok then notify("Search", tostring(e), 4) end
+        hopping = false
+    end)
 end
-do local T = UI.Search
-    local wd = AddDropdown(T, "Tree", {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","LoneCave","BlueSpruce"}, 16)
-    Options.SearchTeleport = {Value = false}
-    AddToggle(T, "Teleport To Tree When Found", false, function(s) Options.SearchTeleport.Value = s end)
-    Options.SearchLoadHub = {Value = false}
-    AddToggle(T, "Load Green Hub If Tree Found", false, function(s) Options.SearchLoadHub.Value = s end)
-    AddButton(T, "Start", function() if hopping then notify("Search", "Already running") return end runSearch(wd.Value) end)
-    AddButton(T, "Stop", function() stopSearch() notify("Search", "Stopped") end)
+
+Tabs.Search:AddDropdown("SearchTree", {
+    Title = "Tree", Multi = false, Default = 16,
+    Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","LoneCave","BlueSpruce"},
+    Callback = function(v) searchTree = v end,
+})
+Tabs.Search:AddToggle("SearchTeleport", {Title = "Teleport To Tree When Found", Default = false, Callback = function() end})
+Tabs.Search:AddToggle("SearchLoadHub", {Title = "Load Green Hub If Tree Found", Default = false, Callback = function() end})
+Tabs.Search:AddButton({Title = "Start", Callback = function()
+    if hopping then notify("Search", "Already running", 2) return end
+    runSearch(searchTree)
+end})
+Tabs.Search:AddButton({Title = "Stop", Callback = function()
+    stopSearch() notify("Search", "Stopped", 2)
+end})
+
+local LocData = {
+    {"Wood R Us", CFrame.new(264,3,57)}, {"Land Store", CFrame.new(293.064,3.200,-99.010)},
+    {"Links Logic", CFrame.new(4608.162,7.001,-783.934)}, {"Volcano", CFrame.new(-1585,625,1140)},
+    {"Swamp", CFrame.new(-1209,138,-801)}, {"Cave", CFrame.new(3581,-177,430)},
+    {"Palm Island", CFrame.new(2549,5,-42)}, {"Fancy Furnishings", CFrame.new(491,13,-1720)},
+    {"Boxed Cars", CFrame.new(509,5,-1463)}, {"Fine Arts Shop", CFrame.new(5207,-156,719)},
+    {"Bob's Shack", CFrame.new(260,10,-2542)}, {"The Den", CFrame.new(323,49,1930)},
+    {"Shrine of Sight", CFrame.new(-1600,205,919)}, {"Ski Lodge", CFrame.new(1244,66,2306)},
+    {"Strange Man", CFrame.new(1061,20,1131)}, {"End Times", CFrame.new(113,-204,-951)},
+    {"Spawn", CFrame.new(0,5,0)},
+}
+local locNames, locCF = {}, {}
+for _, d in ipairs(LocData) do
+    locNames[#locNames+1] = d[1]
+    locCF[d[1]] = d[2]
 end
+local selectedLoc = locNames[1]
+Tabs.Teleport:AddDropdown("LocationPick", {
+    Title = "Location", Values = locNames, Multi = false, Default = 1,
+    Callback = function(v) selectedLoc = v end,
+})
+Tabs.Teleport:AddButton({Title = "TP To Location", Callback = function()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if hrp and locCF[selectedLoc] then
+        hrp.CFrame = locCF[selectedLoc]
+        notify("Teleport", "Teleported to " .. selectedLoc)
+    end
+end})
+
+local function getPlayerNames()
+    local n = {}
+    for _, plr in ipairs(Players:GetPlayers()) do if plr ~= LocalPlayer then n[#n+1] = plr.Name end end
+    return n
+end
+
+local PlayerDrop = Tabs.Teleport:AddDropdown("PlayerTarget", {
+    Title = "Player", Values = getPlayerNames(), Multi = false, Default = 1,
+})
+
+local function refreshPlayers()
+    PlayerDrop:SetValues(getPlayerNames())
+    if _G.ESPToggled then updatePlayerESP() end
+end
+track(Players.PlayerAdded:Connect(function(p)
+    task.wait(0.5) refreshPlayers()
+    track(p.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if _G.ESPToggled then updatePlayerESP() end
+    end))
+end))
+track(Players.PlayerRemoving:Connect(function() task.wait(0.1) refreshPlayers() end))
+
+local function selectedPlayer()
+    local name = Options.PlayerTarget.Value
+    local plr = name and Players:FindFirstChild(name)
+    if not plr then notify("Teleport", "No player selected", 2) end
+    return plr
+end
+
+Tabs.Teleport:AddButton({Title = "TP To Selected Player", Callback = function()
+    local plr = selectedPlayer()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local tgt = plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if hrp and tgt then
+        hrp.CFrame = tgt.CFrame + Vector3.new(3,0,0)
+        notify("Teleport", "Teleported to " .. plr.Name)
+    elseif plr then notify("Teleport", plr.Name .. " not found", 2) end
+end})
+
+Tabs.Teleport:AddButton({Title = "TP To Selected Player's Base", Callback = function()
+    local plr = selectedPlayer()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not (plr and hrp) then return end
+    local base
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "Owner" and obj.Value == plr then
+            local plot = obj.Parent
+            local part = plot and (plot.PrimaryPart or plot:FindFirstChildWhichIsA("BasePart"))
+            if part then base = part break end
+        end
+    end
+    if base then
+        hrp.CFrame = CFrame.new(base.Position + Vector3.new(0,5,0))
+        notify("Teleport", "Teleported to " .. plr.Name .. "'s base")
+    else notify("Teleport", "Base not found", 2) end
+end})
+
+Tabs.Teleport:AddButton({Title = "TP To Nearest Player", Callback = function()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local nearest, dist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local o = plr.Character:FindFirstChild("HumanoidRootPart")
+            if o then
+                local d = (o.Position - hrp.Position).Magnitude
+                if d < dist then nearest, dist = o, d end
+            end
+        end
+    end
+    if nearest then
+        hrp.CFrame = nearest.CFrame + Vector3.new(3,0,0)
+        notify("Teleport", "Teleported to nearest player")
+    else notify("Teleport", "No players found") end
+end})
+
+local ClientItemInfo = ReplicatedStorage:WaitForChild("ClientItemInfo")
+local NPCDialog = ReplicatedStorage:WaitForChild("NPCDialog")
+local storeIds
+
+local function loadStoreIds()
+    if storeIds then return storeIds end
+    local ids, count = {}, 0
+    local conn = NPCDialog.PromptChat.OnClientEvent:Connect(function(_, npc) if not ids[npc.Name] then ids[npc.Name] = npc.ID count += 1 end end)
+    NPCDialog.SetChattingValue:InvokeServer(1)
+    local t = tick()
+    repeat task.wait() until count >= 12 or tick() - t > 10
+    conn:Disconnect() NPCDialog.SetChattingValue:InvokeServer(0)
+    if next(ids) then storeIds = ids end
+    return ids
+end
+
+local function getFolder(n)
+    for _, f in ipairs(ClientItemInfo:GetChildren()) do if (f:FindFirstChild("ItemName") and f.ItemName.Value == n) or f.Name == n then return f end end
+end
+local function findStoreItem(n)
+    for _, m in ipairs(workspace.Stores:GetChildren()) do
+        if m.Name == "ShopItems" then
+            for _, item in ipairs(m:GetChildren()) do
+                if item:FindFirstChild("Owner") and item.Owner.Value == nil and item:FindFirstChild("BoxItemName") and item.BoxItemName.Value == n then return item end
+            end
+        end
+    end
+end
+local function findCounter(item)
+    local best, bestDist = nil, math.huge
+    for _, store in ipairs(workspace.Stores:GetChildren()) do
+        local c = store:FindFirstChild("Counter")
+        if c then
+            local d = (c.Position - item.Main.Position).Magnitude
+            if d < bestDist then best, bestDist = c, d end
+        end
+    end
+    return best
+end
+
+local function buyOne(name)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local folder = getFolder(name)
+    local item = findStoreItem(folder and folder.Name or name)
+    if not item then notify("Buy", "No " .. name .. " in stock", 3) return false end
+    local counter = findCounter(item)
+    if not counter then notify("Buy", "Counter not found", 3) return false end
+    local startCF = hrp.CFrame
+    local ids = loadStoreIds()
+    local npcName
+    for _, p in ipairs(counter.Parent:GetDescendants()) do if p.Name == "Head" and p.Parent and p.Parent:IsA("Model") then npcName = p.Parent break end end
+    hrp.CFrame = item.Main.CFrame + Vector3.new(5,3,5)
+    task.wait(0.5)
+    local bought
+    local conn = workspace.PlayerModels.ChildAdded:Connect(function(obj)
+        local owner = obj:WaitForChild("Owner", 1)
+        local itemName = obj:WaitForChild("ItemName", 1)
+        local purchased = obj:WaitForChild("PurchasedBoxItemName", 1)
+        if owner and owner.Value == LocalPlayer and folder and ((itemName and itemName.Value == folder.Name) or (purchased and purchased.Value == folder.Name)) then bought = obj end
+    end)
+    dragTo(item, counter.CFrame + Vector3.new(0, counter.Size.Y * item.Main.Size.Y / 2, 0), 45)
+    local tries = 0
+    repeat
+        task.wait() tries += 1
+        if npcName and ids[npcName.Name] then pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = ids[npcName.Name]}, "ConfirmPurchase") end) end
+    until bought or tries > 20 or _G.AbortAction
+    conn:Disconnect()
+    if bought then
+        local bHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if bHrp then bHrp.CFrame = bought:GetPivot() + Vector3.new(0,5,0) task.wait(0.2) end
+        dragTo(bought, startCF, 30) notify("Buy", "Bought " .. name, 3)
+    else notify("Buy", "Purchase did not go through", 3) end
+    hrp.CFrame = startCF return bought ~= nil
+end
+
+local selectedBuy, buyAmount, customBuy = "BasicHatchet", 1, ""
+
+local catTools = {"BasicHatchet","Axe1","Axe2","Axe3","SilverAxe"}
+local catWire = {"Wire","Lever0","Button0","ChopSaw","PressurePlate","SignalSustain","Laser","LaserReceiver","Hatch","GateNOT","GateOR","GateAND","GateXOR","WoodChecker","SignalDelay","NeonWireRed","NeonWireOrange","NeonWireYellow","NeonWireGreen","NeonWireCyan","NeonWireBlue","NeonWireViolet","NeonWireWhite","NeonWirePinky","IcicleWireAmber","IcicleWireRed","IcicleWireGreen","IcicleWireBlue","IcicleWireMagenta","FireworkLauncher","IcicleWireHalloween"}
+local catOther = {"BagOfSand","CanOfWorms","LightBulb","Dynamite"}
+local catVehicles = {"UtilityTruck","UtilityTruck2","SmallTrailer","Pickup1","Trailer2","Sleigh"}
+local catOtherRest = {"PropertySignSold","WorkLight","PumpkinClassic","BlueBaii","Bobblehead","Spork","CoalLump","RedBall","PumpkinDark","Skull","Eye1","Turkey","Bobblehead2","B1","BlueBall","PumpkinGreen","Turkey2","Bobblehead3","GreenBall","Bobblehead4","Bobblehead5","PumpkinCursed","CanOfCranberry","BagOfCandy","Candy","Turkey3","SnowBall","Plate","Cocoa","CandyCane","Duck","Cone","Toboggan","Scoobis","PlumBall","YellowBall"}
+local catStructures = {"Wall2Tall","Door1","Door2","Floor2","Floor1Small","Post","Wedge10","Wall3Tall","Wall1Tall","Wall1","Wall1Short","Wall2","Wall2Short","Wall1TallCorner","Wall1Corner","Wall1ShortCorner","Wall1Thin","Wall1TallThin","Wall1ShortThin","Wall2TallThin","Wall2Thin","Wall2ShortThin","Wall2TallCorner","Wall2Corner","Wall2ShortCorner","Wall3Thin","Wall3TallThin","Wall3Corner","Wall3TallCorner","Floor1Large","Floor1","Floor2Large","Floor2Small","Stair1","Stair2","Wedge1_Thin","Wedge9_Thin","Wedge4_Thin","Wedge7_Thin","Chair1","Table1","Table2","Ladder1","Cabinet1Thin","Cabinet1","Cabinet1CornerTight","Cabinet1CornerWide","CounterTop1Thin","CounterTop1","CounterTop1Sink","Floor2Tiny","Floor1Tiny","Wedge1","Wedge2","Wedge3","Wedge4","Wedge8","Wedge7","Wedge6","Wedge2_Thin","Wedge3_Thin","Wedge10_Thin","Wedge9","Wedge6_Thin","Wedge8_Thin","Wedge5","Wedge5_Thin","Wall3"}
+
+local function joinLists(...)
+    local o = {}
+    for _, list in ipairs({...}) do for _, v in ipairs(list) do o[#o+1] = v end end
+    return o
+end
+
+local defaultBuyList = joinLists(catTools, catWire, catOther, catVehicles)
+local fullBuyList = joinLists(catTools, catWire, catOther, catVehicles, catOtherRest, catStructures)
+
+local BuyDrop = Tabs.Autobuy:AddDropdown("BuyTarget", {
+    Title = "Item", Multi = false, Default = 1, Values = defaultBuyList,
+    Callback = function(v) selectedBuy = v end,
+})
+Tabs.Autobuy:AddButton({Title = "Load full item list", Callback = function()
+    BuyDrop:SetValues(fullBuyList) notify("Buy", "Full item list loaded", 2)
+end})
+Tabs.Autobuy:AddSlider("BuyAmount", {
+    Title = "Amount", Default = 1, Min = 1, Max = 30, Rounding = 0,
+    Callback = function(v) buyAmount = v end,
+})
+local function runBuys(name)
+    _G.AbortAction = false
+    task.spawn(function()
+        if buyAmount < 1 then notify("Buy", "Set amount above 0", 2) return end
+        for _ = 1, buyAmount do if _G.AbortAction or not buyOne(name) then break end end
+    end)
+end
+Tabs.Autobuy:AddButton({Title = "Buy Selected", Callback = function() runBuys(selectedBuy) end})
+Tabs.Autobuy:AddInput("CustomItem", {Title = "Custom Item", Default = "", Placeholder = "Type exact item name", Numeric = false, Finished = true, Callback = function(t) customBuy = t end})
+Tabs.Autobuy:AddButton({Title = "Buy Custom", Callback = function()
+    if customBuy == "" then notify("Buy", "Type an item name", 2) return end
+    runBuys(customBuy)
+end})
+Tabs.Autobuy:AddButton({Title = "Abort", Callback = function() _G.AbortAction = true notify("Buy", "Aborting...", 2) end})
+local function buyList(list, label)
+    _G.AbortAction = false
+    task.spawn(function()
+        for _, n in ipairs(list) do if _G.AbortAction then break end buyOne(n) end
+        notify(label, _G.AbortAction and "Aborted" or "Finished", 3)
+    end)
+end
+Tabs.Autobuy:AddButton({Title = "Buy All Blueprints", Callback = function() buyList(catStructures, "Blueprints") end})
+
+local serviceIds = {Bridge=14, Ferry=13, Power=5}
+local selectedService = "Bridge"
+Tabs.Autobuy:AddDropdown("ServicePick", {Title = "Service", Multi = false, Default = 1, Values = {"Bridge","Ferry","Power"}, Callback = function(v) selectedService = v end})
+Tabs.Autobuy:AddButton({Title = "Buy Service", Callback = function()
+    local id = serviceIds[selectedService]
+    if not id then return end
+    local ok, err = pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = id}, "ConfirmPurchase") end)
+    notify("Service", ok and ("Sent " .. selectedService .. " purchase") or ("Failed: " .. tostring(err)), 3)
+end})
+
+local function vehicleSpeed(v)
+    for _, obj in ipairs(workspace.PlayerModels:GetChildren()) do
+        if obj:FindFirstChild("Type") and obj.Type.Value == "Vehicle" and obj:FindFirstChild("DriveSeat") then pcall(function() obj.Configuration.MaxSpeed.Value = v end) end
+    end
+end
+local function flipVehicle()
+    pcall(function()
+        local char = LocalPlayer.Character
+        char.Humanoid.SeatPart.Parent:PivotTo(CFrame.new(char.HumanoidRootPart.CFrame.p) + Vector3.new(0,5,0))
+    end)
+end
+
+local vehSpeedValue = 1
+Tabs.Vehicle:AddDropdown("VehicleSpeed", {Title = "Vehicle Speed", Values = {"1","2","3","4","5","6"}, Multi = false, Default = 1, Callback = function(v) vehSpeedValue = tonumber(v) or 1 end})
+Tabs.Vehicle:AddToggle("VehSpeedToggle", {Title = "Apply Vehicle Speed", Default = false, Callback = function(s) vehSpeedOn = s end})
+task.spawn(function() while _G.MasterActive do if vehSpeedOn then vehicleSpeed(vehSpeedValue) end task.wait(0.5) end end)
+Tabs.Vehicle:AddToggle("VehFlyToggle", {Title = "Vehicle Fly", Default = false, Callback = function(s)
+    vehFlyOn = s
+    if s then
+        if not startVehFly() then notify("Vehicle Fly", "Sit in a vehicle first", 2) end
+    else stopVehFly() end
+end})
+Tabs.Vehicle:AddButton({Title = "Flip Vehicle", Callback = flipVehicle})
+
+local alwaysDay, alwaysNight = false, false
+track(RunService.Heartbeat:Connect(function()
+    if alwaysDay then Lighting.ClockTime = 12
+    elseif alwaysNight then Lighting.ClockTime = 0 end
+end))
+
+local function changeWater(prop, val)
+    pcall(function() for _, part in ipairs(workspace.Water:GetChildren()) do if part.Name == "Water" then part[prop] = val end end end)
+end
+
+local bridgeIsDown = false
+local function bridgeDown(down)
+    if down == bridgeIsDown then return end
+    bridgeIsDown = down
+    pcall(function() for _, part in ipairs(workspace.Bridge.VerticalLiftBridge.Lift:GetChildren()) do part.Position = part.Position + Vector3.new(0, down and -26 or 26, 0) end end)
+end
+
+local extraSupportsLoaded = false
+Tabs.World:AddToggle("AlwaysDay", {Title = "Always Day", Default = false, Callback = function(s) alwaysDay = s if s then alwaysNight = false end end})
+Tabs.World:AddToggle("AlwaysNight", {Title = "Always Night", Default = false, Callback = function(s) alwaysNight = s if s then alwaysDay = false end end})
+Tabs.World:AddToggle("Shadows", {Title = "Shadows", Default = true, Callback = function(s) Lighting.GlobalShadows = s end})
+Tabs.World:AddButton({Title = "Remove Spooky Mode", Callback = function() for _, c in ipairs(Lighting:GetChildren()) do c:Destroy() end end})
+Tabs.World:AddToggle("BridgeDown", {Title = "Bridge Down", Default = false, Callback = function(s) bridgeDown(s) end})
+Tabs.World:AddToggle("WalkOnWater", {Title = "Walk On Water", Default = false, Callback = function(s) changeWater("CanCollide", s) end})
+Tabs.World:AddToggle("RemoveWater", {Title = "Remove Water", Default = false, Callback = function(s) changeWater("Transparency", s and 1 or 0) end})
+Tabs.World:AddToggle("ExtraSupports", {Title = "Extra Supports", Default = false, Callback = function(s)
+    if s and not extraSupportsLoaded then
+        extraSupportsLoaded = true
+        pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/tASirLbL"))() end)
+    elseif not s and extraSupportsLoaded then notify("Extra Supports", "Rejoin to fully remove supports", 4) end
+end})
+Tabs.World:AddButton({Title = "Get Green Box", Callback = function() pcall(function() workspace.Region_Volcano.VolcanoWin.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame end) end})
+
+local originalLighting = {Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime, FogEnd = Lighting.FogEnd, GlobalShadows = Lighting.GlobalShadows, Ambient = Lighting.Ambient}
+local function setFullbright(on)
+    _G.FullBright = on
+    if not on then
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.Ambient = originalLighting.Ambient
+    end
+end
+
+local function setHardDragger(on)
+    if on then
+        if draggerConn then return end
+        draggerConn = workspace.ChildAdded:Connect(function(obj)
+            if obj.Name ~= "Dragger" then return end
+            local BG = obj:WaitForChild("BodyGyro", 2)
+            local BP = obj:WaitForChild("BodyPosition", 2)
+            if not (BG and BP) then return end
+            repeat
+                BP.P = 80000 BP.D = 1000 BP.MaxForce = Vector3.new(1,1,1) * 1000000
+                BG.MaxTorque = Vector3.new(1,1,1) * 200 BG.P = 1200 BG.D = 140
+                task.wait()
+            until not workspace:FindFirstChild("Dragger")
+        end)
+    else dc(draggerConn) draggerConn = nil end
+end
+
+local function longWire()
+    for _, info in ipairs(ReplicatedStorage.ClientItemInfo:GetChildren()) do pcall(function() if info.ItemName.Value == "Wire" then info.OtherInfo.MaxLength.Value = 60 end end) end
+end
+local function safeSuicideTeleport() local char = LocalPlayer.Character if char then char:PivotTo(CFrame.new(3392, -397, -3389)) end end
+
+Tabs.Player:AddSlider("WalkSpeed", {Title = "WalkSpeed", Default = 16, Min = 16, Max = 400, Rounding = 0, Callback = function(v) _G.WalkSpeed = v end})
+Tabs.Player:AddSlider("JumpPower", {Title = "JumpPower", Default = 50, Min = 50, Max = 300, Rounding = 0, Callback = function(v) _G.JumpPower = v end})
+Tabs.Player:AddSlider("FlySpeed", {Title = "Fly Speed", Default = 60, Min = 10, Max = 500, Rounding = 0, Callback = function(v) _G.FlySpeed = v end})
+
+Tabs.Player:AddToggle("Speed", {Title = "Apply Walk/Jump Values", Default = true, Callback = function(s)
+    if not s then local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end end
+end})
+Tabs.Player:AddToggle("NoclipToggle", {Title = "Noclip", Default = false, Callback = function(s) _G.Noclip = s end})
+Tabs.Player:AddToggle("FlyToggle", {Title = "Fly", Default = false, Callback = function(s) SetFly(s) end})
+Tabs.Player:AddToggle("InfJumpToggle", {Title = "Inf Jump", Default = false, Callback = function(s) _G.InfJump = s end})
+Tabs.Player:AddToggle("FullBright", {Title = "Fullbright", Default = false, Callback = function(s) setFullbright(s) end})
+Tabs.Player:AddToggle("AntiAFK", {Title = "Anti AFK", Default = true, Callback = function(s) _G.AntiAFK = s end})
+Tabs.Player:AddToggle("HardDragger", {Title = "Hard Dragger", Default = false, Callback = setHardDragger})
+
+Tabs.Player:AddButton({Title = "Long Wire", Callback = longWire})
+Tabs.Player:AddButton({Title = "Safe Suicide", Callback = safeSuicideTeleport})
+Tabs.Player:AddButton({Title = "Reset Character", Callback = function() local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.Health = 0 end end})
+Tabs.Player:AddButton({Title = "Sit Down", Callback = function() local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") if hum then hum.Sit = true end end})
+
+local onScreenGui = Instance.new("ScreenGui")
+onScreenGui.Name = "GreenHubOnScreen"
+onScreenGui.ResetOnSpawn = false
+onScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local OnScreenItems = {
+    {Key = "Speed", Label = "Walk/Jump", Color = Color3.fromRGB(0,255,0)},
+    {Key = "NoclipToggle", Label = "Noclip", Color = Color3.fromRGB(255,255,255)},
+    {Key = "FlyToggle", Label = "Fly", Color = Color3.fromRGB(0,255,255)},
+    {Key = "InfJumpToggle", Label = "Inf Jump", Color = Color3.fromRGB(255,200,0)},
+    {Key = "FullBright", Label = "Fullbright", Color = Color3.fromRGB(255,255,100)},
+    {Key = "AntiAFK", Label = "Anti AFK", Color = Color3.fromRGB(0,255,150)},
+    {Key = "HardDragger", Label = "Hard Dragger", Color = Color3.fromRGB(255,80,80)},
+}
+
+local onScreenBtns = {}
+local savedPos = {}
+local activePress
+
+local function onScreenState(item) local o = Options[item.Key] return o and o.Value == true end
+local function toggleFunction(item) local o = Options[item.Key] if o then o:SetValue(not o.Value) end end
+local function matches(p, input)
+    if p.input.UserInputType == Enum.UserInputType.MouseButton1 then return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseMovement end
+    return input == p.input
+end
+
+local function bindPress(btn, item)
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if activePress then return end
+        local press = {btn = btn, item = item, input = input, dragging = false, start = input.Position, origin = btn.Position}
+        activePress = press
+        task.delay(0.2, function() if activePress == press then press.dragging = true end end)
+    end)
+end
+
+track(UIS.InputChanged:Connect(function(input)
+    local p = activePress
+    if not p or not p.dragging or not matches(p, input) then return end
+    local d = input.Position - p.start
+    p.btn.Position = UDim2.new(p.origin.X.Scale, p.origin.X.Offset + d.X, p.origin.Y.Scale, p.origin.Y.Offset + d.Y)
+end))
+track(UIS.InputEnded:Connect(function(input)
+    local p = activePress
+    if not p or not matches(p, input) then return end
+    activePress = nil
+    if not p.dragging then toggleFunction(p.item) end
+end))
+
+local function makeOSBtn(item, index)
+    local btn = Instance.new("TextButton")
+    btn.Name = "OS_" .. item.Key
+    btn.Size = UDim2.fromOffset(140, 40)
+    btn.Position = savedPos[item.Key] or UDim2.new(0, 20, 0.3, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(15,15,15)
+    btn.AutoButtonColor = false
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.Text = item.Label .. ": Off"
+    btn.Parent = onScreenGui
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+    local stroke = Instance.new("UIStroke", btn)
+    stroke.Color = item.Color
+    stroke.Thickness = 2
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    bindPress(btn, item)
+    return btn
+end
+
+local function setOSVisible(index, item, show)
+    local btn = onScreenBtns[item.Key]
+    if show then
+        if not btn then btn = makeOSBtn(item, index) onScreenBtns[item.Key] = btn end
+        btn.Visible = true
+    elseif btn then
+        savedPos[item.Key] = btn.Position
+        if activePress and activePress.btn == btn then activePress = nil end
+        btn.Visible = false
+    end
+end
+
+for index, item in ipairs(OnScreenItems) do
+    Tabs.OnScreen:AddToggle("ShowOS_" .. item.Key, {Title = "Show " .. item.Label .. " Button", Default = false, Callback = function(s) setOSVisible(index, item, s) end})
+end
+
+task.spawn(function()
+    while _G.MasterActive do
+        for _, item in ipairs(OnScreenItems) do
+            local btn = onScreenBtns[item.Key]
+            if btn then btn.Text = item.Label .. ": " .. (onScreenState(item) and "On" or "Off") end
+        end
+        task.wait(0.2)
+    end
+end)
+
+Tabs.Visuals:AddToggle("PlayerESP", {Title = "Player ESP", Default = false, Callback = function(s) _G.ESPToggled = s if s then updatePlayerESP() else clearPlayerESP() end end})
+Tabs.Visuals:AddToggle("ItemESP", {Title = "Item ESP", Default = false, Callback = function(s) itemESPOn = s if not s then clearItemESP() end end})
+Tabs.Visuals:AddButton({Title = "Remove Fog", Callback = function() Lighting.FogEnd = 100000 end})
+Tabs.Visuals:AddButton({Title = "Night Mode", Callback = function() Lighting.ClockTime = 0 Lighting.Brightness = 0.1 end})
+Tabs.Visuals:AddButton({Title = "Restore Lighting", Callback = function() Lighting.ClockTime = 14 Lighting.Brightness = 1 Lighting.FogEnd = 100000 Lighting.GlobalShadows = true Lighting.Ambient = Color3.fromRGB(70,70,70) end})
+
+local autoChopOn = false
+local CHOP_RANGE = 80
+local MAX_AT_ONCE = 5
+local CHOP_TREE_KIND = "All"
+local chopLoopId = 0
+
+local function treeFree(t) local o = t:FindFirstChild("Owner") return not o or o.Value == nil or o.Value == LocalPlayer end
+local function nearbyTrees(count)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+    local list = {}
+    for _, region in ipairs(workspace:GetChildren()) do
+        if region.Name == "TreeRegion" then
+            for _, t in ipairs(region:GetChildren()) do
+                if t:IsA("Model") and t:FindFirstChild("CutEvent") and t:FindFirstChild("TreeClass") and t.TreeClass.Value ~= "LoneCave" and treeFree(t) and (CHOP_TREE_KIND == "All" or t.TreeClass.Value == CHOP_TREE_KIND) then
+                    local d = (t:GetPivot().Position - hrp.Position).Magnitude
+                    if d <= CHOP_RANGE then list[#list+1] = {tree = t, dist = d} end
+                end
+            end
+        end
+    end
+    table.sort(list, function(a,b) return a.dist < b.dist end)
+    local out = {}
+    for i = 1, math.min(count, #list) do out[i] = list[i].tree end
+    return out
+end
+
+Tabs.AutoChop:AddDropdown("AutoChopTree", {Title = "Tree Kind", Values = {"All","Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"}, Multi = false, Default = 1, Callback = function(v) CHOP_TREE_KIND = v end})
+Tabs.AutoChop:AddToggle("AutoChopToggle", {Title = "Auto Chop", Default = false, Callback = function(s)
+    autoChopOn = s
+    chopLoopId += 1
+    if not s then return end
+    local loopId = chopLoopId
+    task.spawn(function()
+        while autoChopOn and chopLoopId == loopId and _G.MasterActive do
+            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local ax = getAnyAxe()
+            if hrp and ax then
+                local axName = ax.ToolName.Value
+                for _, tree in ipairs(nearbyTrees(MAX_AT_ONCE)) do
+                    local stats = getAxStats(axName, tree.TreeClass.Value)
+                    if stats then fireCut(tree, ax, stats) end
+                end
+            end
+            task.wait(0.5)
+        end
+    end)
+end})
+
+Tabs.Automation:AddToggle("AutoSell", {Title = "Auto Sell", Default = false, Callback = function(state)
+    if state then
+        task.spawn(function()
+            while Options.AutoSell.Value and _G.MasterActive do
+                sellEverything(true)
+                while sellInFlight > 0 and Options.AutoSell.Value and _G.MasterActive do task.wait(0.1) end
+                task.wait(0.3)
+            end
+        end)
+    end
+end})
+
+Tabs.Automation:AddToggle("AutoRejoin", {Title = "Auto Rejoin On Kick", Default = false, Callback = function(state)
+    if state and not autoRejoinConn then
+        autoRejoinConn = LocalPlayer.CharacterRemoving:Connect(function() task.wait(3) if Options.AutoRejoin.Value and not LocalPlayer.Character then TeleportService:Teleport(game.PlaceId, LocalPlayer) end end)
+    elseif not state then dc(autoRejoinConn) autoRejoinConn = nil end
+end})
+
+local autoFarmWoodType = "Generic"
+local farmStatus = Tabs.Farm:AddParagraph({Title = "Farm Status", Content = "OFF"})
+Tabs.Farm:AddDropdown("FarmWood", {Title = "Target Wood", Values = {"Generic","Oak","Birch","Cherry","Walnut","Fir","Pine","Maple","Volcano","Frost","GoldSwampy","Koa","Palm","CaveCrawler","GreenSwampy","BlueSpruce"}, Multi = false, Default = 1, Callback = function(v) autoFarmWoodType = v end})
+
+local autoFarmActive = false
+Tabs.Farm:AddToggle("AutoFarm", {Title = "Auto Farm", Default = false, Callback = function(state)
+    autoFarmActive = state
+    if not state then farmStatus:SetDesc("OFF") return end
+    task.spawn(function()
+        while autoFarmActive and _G.MasterActive do
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+                local curpos = hrp.CFrame
+                local target = getTreeOfClass(autoFarmWoodType)
+                local ax, stats = getBestAxe(autoFarmWoodType)
+                if not (target and ax and stats) then farmStatus:SetDesc("No tree or axe found") task.wait(2) return end
+                farmStatus:SetDesc("Cutting " .. autoFarmWoodType)
+                local ws = target:FindFirstChild("WoodSection") or target:FindFirstChildWhichIsA("BasePart")
+                local targetPos = ws and (ws.Position + Vector3.new(5,3,0)) or (target:GetPivot().Position + Vector3.new(5,3,0))
+                local newLog
+                local con = workspace.LogModels.ChildAdded:Connect(function(l) task.wait() local o = l:FindFirstChild("Owner") if o and o.Value == LocalPlayer then newLog = l end end)
+                local lp = RunService.Heartbeat:Connect(function() local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if r and target.Parent then r.CFrame = CFrame.new(targetPos) end end)
+                local timeout = 0
+                repeat if not target.Parent then break end fireCut(target, ax, stats) task.wait(stats.SwingCooldown) timeout += stats.SwingCooldown until newLog ~= nil or timeout > 30 or not autoFarmActive
+                lp:Disconnect() con:Disconnect() task.wait(0.2)
+                if newLog then farmStatus:SetDesc("Bringing log") dragLogTo(newLog, curpos, 90) end
+                hrp.CFrame = curpos farmStatus:SetDesc("Selling") sellEverything(true)
+                while sellInFlight > 0 and autoFarmActive and _G.MasterActive do task.wait(0.1) end
+                task.wait(1) farmStatus:SetDesc("Farming " .. autoFarmWoodType)
+            end)
+        end
+        farmStatus:SetDesc("OFF")
+    end)
+end})
+
+local selectedSlot = 1
+local remotesCache
+local function getRemotes()
+    if not remotesCache then remotesCache = loadstring(game:HttpGet("https://codeberg.org/silent_ben8x/Aurora/raw/branch/main/Modules/RemoteHandler"))() end
+    return remotesCache
+end
+
+Tabs.Slots:AddDropdown("SlotPick", {Title = "Slot", Values = {"1","2","3","4","5","6"}, Multi = false, Default = 1, Callback = function(v) selectedSlot = tonumber(v) or 1 end})
+Tabs.Slots:AddButton({Title = "Save Selected Slot", Callback = function() local ok, err = pcall(function() getRemotes().RequestSave:Call(selectedSlot) end) notify("Slots", ok and ("Saved slot " .. selectedSlot) or ("Save failed: " .. tostring(err)), 3) end})
+Tabs.Slots:AddButton({Title = "Load Selected Slot", Callback = function() local ok, err = pcall(function() getRemotes().RequestLoad:Call(selectedSlot) end) notify("Slots", ok and ("Loaded slot " .. selectedSlot) or ("Load failed: " .. tostring(err)), 3) end})
 
 local LAND_CF = CFrame.new(293.064, 3.200, -99.010)
-do local T = UI.Slots
-    local remotesCache
-    local function getRemotes() if not remotesCache then remotesCache = loadstring(game:HttpGet("https://codeberg.org/silent_ben8x/Aurora/raw/branch/main/Modules/RemoteHandler"))() end return remotesCache end
-    local sD = AddDropdown(T, "Slot", {"1","2","3","4","5","6"}, 1)
-    AddButton(T, "Save Selected Slot", function() local ok, err = pcall(function() getRemotes().RequestSave:Call(tonumber(sD.Value) or 1) end) notify("Slots", ok and "Saved" or "Failed") end)
-    AddButton(T, "Load Selected Slot", function() local ok, err = pcall(function() getRemotes().RequestLoad:Call(tonumber(sD.Value) or 1) end) notify("Slots", ok and "Loaded" or "Failed") end)
-    AddButton(T, "Get Land (100$)", function() task.spawn(function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not hrp then return end hrp.CFrame = LAND_CF task.wait(0.6) local ids = loadStoreIds() local best, bestDist for _, m in ipairs(workspace:GetDescendants()) do if m:IsA("Model") and m:FindFirstChild("Head") and ids[m.Name] then local d = (m.Head.Position - hrp.Position).Magnitude if d < 30 and (not bestDist or d < bestDist) then best, bestDist = m, d end end end if best then pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = ids[best.Name]}, "ConfirmPurchase") end) notify("Land", "Sent") end end) end)
-    AddButton(T, "Max Land", function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if hrp then hrp.CFrame = LAND_CF task.wait(0.5) pcall(function() ReplicatedStorage.Transactions.ClientToServer.PurchaseLand:InvokeServer(3) end) end end)
-    AddButton(T, "Teleport To Land Store", function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if hrp then hrp.CFrame = LAND_CF end end)
+Tabs.Slots:AddButton({Title = "Get Land (100$)", Callback = function()
+    task.spawn(function()
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        hrp.CFrame = LAND_CF task.wait(0.6)
+        local ids = loadStoreIds() local best, bestDist
+        for _, m in ipairs(workspace:GetDescendants()) do if m:IsA("Model") and m:FindFirstChild("Head") and ids[m.Name] then local d = (m.Head.Position - hrp.Position).Magnitude if d < 30 and (not bestDist or d < bestDist) then best, bestDist = m, d end end end
+        if not best then notify("Land", "Land NPC not found", 3) return end
+        pcall(function() NPCDialog.PlayerChatted:InvokeServer({ID = ids[best.Name]}, "ConfirmPurchase") end)
+        notify("Land", "Sent land purchase to " .. best.Name, 3)
+    end)
+end})
+Tabs.Slots:AddButton({Title = "Max Land", Callback = function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if not hrp then return end hrp.CFrame = LAND_CF task.wait(0.5) pcall(function() ReplicatedStorage.Transactions.ClientToServer.PurchaseLand:InvokeServer(3) end) end})
+Tabs.Slots:AddButton({Title = "Teleport To Land Store", Callback = function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") if hrp then hrp.CFrame = LAND_CF end end})
+
+Tabs.Misc:AddButton({Title = "Give Btools", Callback = function() for _, n in ipairs({"Clone","Fill","Resize","Smooth"}) do local t = Instance.new("HopperBin") t.BinType = Enum.BinType[n] t.Parent = LocalPlayer.Backpack end end})
+Tabs.Misc:AddButton({Title = "Copy Game ID", Callback = function() setclipboard(tostring(game.PlaceId)) notify("Misc", "Game ID copied") end})
+Tabs.Misc:AddButton({Title = "Print All Remotes", Callback = function() for _, v in pairs(ReplicatedStorage:GetDescendants()) do if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then print(v:GetFullName()) end end notify("Misc", "Remotes printed to console") end})
+Tabs.Misc:AddButton({Title = "Sell All (BETA)", Callback = function() sellEverything(false) end})
+Tabs.Misc:AddButton({Title = "Sell Debug", Callback = function()
+    local all, mine = 0, 0 local samples = {}
+    for _, log in ipairs(workspace.LogModels:GetChildren()) do
+        if log:IsA("Model") and string.find(log.Name, "Loose_") then
+            all += 1
+            local o = log:FindFirstChild("Owner")
+            if o then if ownsValue(o.Value) then mine += 1 elseif #samples < 3 then samples[#samples+1] = typeof(o.Value) .. "=" .. tostring(o.Value) end
+            else if #samples < 3 then samples[#samples+1] = "no Owner" end end
+        end
+    end
+    notify("Sell Debug", all .. " loose, " .. mine .. " yours", 4)
+    if #samples > 0 then task.wait(0.5) notify("Owner samples", table.concat(samples, " | "), 6) end
+end})
+
+Tabs.Dupe:AddButton({Title = "PATCHED", Callback = function() notify("Dupe", "Axe dupe is patched", 3) end})
+
+local function getHub()
+    if Fluent.GUI and Fluent.GUI.Parent then return Fluent.GUI end
+    for _, parent in ipairs({game:GetService("CoreGui"), LocalPlayer:WaitForChild("PlayerGui")}) do
+        for _, gui in ipairs(parent:GetChildren()) do
+            if gui:IsA("ScreenGui") then for _, d in ipairs(gui:GetDescendants()) do if d:IsA("TextLabel") and d.Text == "Green Hub" then return gui end end end
+        end
+    end
 end
 
-do local T = UI.Misc
-    AddButton(T, "Give Btools", function() for _, n in ipairs({"Clone","Fill","Resize","Smooth"}) do local t = Instance.new("HopperBin") t.BinType = Enum.BinType[n] t.Parent = LocalPlayer.Backpack end end)
-    AddButton(T, "Copy Game ID", function() setclipboard(tostring(game.PlaceId)) notify("Misc", "Copied") end)
-    AddButton(T, "Print All Remotes", function() for _, v in pairs(ReplicatedStorage:GetDescendants()) do if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then print(v:GetFullName()) end end notify("Misc", "Printed") end)
-    AddButton(T, "Sell All (BETA)", function() sellEverything(false) end)
-    AddButton(T, "Sell Debug", function() local all, mine = 0, 0 local samples = {} for _, log in ipairs(workspace.LogModels:GetChildren()) do if log:IsA("Model") and string.find(log.Name, "Loose_") then all += 1 local o = log:FindFirstChild("Owner") if o then if ownsValue(o.Value) then mine += 1 elseif #samples < 3 then samples[#samples+1] = typeof(o.Value) .. "=" .. tostring(o.Value) end else if #samples < 3 then samples[#samples+1] = "no Owner" end end end end notify("Sell Debug", all .. " loose, " .. mine .. " yours") if #samples > 0 then task.wait(0.5) notify("Owner samples", table.concat(samples, " | ")) end end)
+local controlsSetup = false
+local function setupControls(root)
+    if controlsSetup or not root then return end
+    controlsSetup = true
+    local Controls = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule")):GetControls()
+    track(root.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Controls:Disable() end end))
+    track(UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then Controls:Enable() end end))
 end
 
-do local T = UI.Dupe
-    AddButton(T, "PATCHED", function() notify("Dupe", "Axe dupe is patched") end)
+task.spawn(function() task.wait(1) setupControls(Window.Root) end)
+
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "GreenHubToggle"
+ToggleGui.ResetOnSpawn = false
+ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "OpenClose"
+ToggleBtn.Size = UDim2.fromOffset(110, 36)
+ToggleBtn.Position = UDim2.new(0, 20, 0, 120)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+ToggleBtn.TextColor3 = Color3.fromRGB(0,255,0)
+ToggleBtn.Text = "Open/Close"
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 14
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.Parent = ToggleGui
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = Color3.fromRGB(0,255,0)
+ToggleStroke.Thickness = 2
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local function toggleHub() local ok = pcall(function() Window:Minimize() end) if not ok then local hub = getHub() if hub then hub.Enabled = not hub.Enabled end end end
+
+local movable = false
+local dragging, dragStart, startPos, moved = false, nil, nil, false
+ToggleBtn.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging, moved = true, false dragStart, startPos = input.Position, ToggleBtn.Position end end)
+track(UIS.InputChanged:Connect(function(input) if dragging and movable and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local d = input.Position - dragStart if d.Magnitude > 4 then moved = true end ToggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y) end end))
+track(UIS.InputEnded:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then dragging = false if not moved then toggleHub() end end end))
+
+local togglePositions = {
+    ["Center Left"]  = {Vector2.new(0,0.5), UDim2.new(0,20,0.5,0)},
+    ["Center Right"] = {Vector2.new(1,0.5), UDim2.new(1,-20,0.5,0)},
+    ["Top Right"]    = {Vector2.new(1,0), UDim2.new(1,-20,0,20)},
+    ["Bottom Right"] = {Vector2.new(1,1), UDim2.new(1,-20,1,-70)},
+    ["Top Left"]     = {Vector2.new(0,0), UDim2.new(0,20,0,20)},
+    ["Bottom Left"]  = {Vector2.new(0,1), UDim2.new(0,20,1,-70)},
+}
+
+Tabs.Settings:AddToggle("Transparent", {Title = "Transparent", Default = false, Callback = function(s) if Window.Root then Window.Root.BackgroundTransparency = s and 0.5 or 0 end end})
+Tabs.Settings:AddToggle("MovableBtn", {Title = "Movable Open/Close Button", Default = false, Callback = function(s) movable = s end})
+Tabs.Settings:AddDropdown("TogglePos", {Title = "Open/Close Position", Multi = false, Default = 1, Values = {"Center Left","Center Right","Top Right","Bottom Right","Top Left","Bottom Left"}, Callback = function(v) local p = togglePositions[v] if p then ToggleBtn.AnchorPoint = p[1] ToggleBtn.Position = p[2] end end})
+Tabs.Settings:AddParagraph({Title = "Keybinds", Content = "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood"})
+
+local function roundOne(d)
+    if not d:IsA("GuiObject") then return end
+    local c = d:FindFirstChildOfClass("UICorner")
+    if not c then c = Instance.new("UICorner") c.Parent = d end
+    if c.CornerRadius.Scale >= 0.5 then return end
+    if c.CornerRadius.Offset < 14 then c.CornerRadius = UDim.new(0, 14) end
 end
 
-do local T = UI.Settings
-    AddParagraph(T, "Keybinds")
-    AddParagraph(T, "RShift = Hub | F = Fly | N = Noclip | J = Inf Jump | B = Bring Wood")
+local paintSaved = setmetatable({}, {__mode = "k"})
+local paintMode = "none"
+local outlineColor = Color3.fromRGB(0,255,0)
+local GREEN = Color3.fromRGB(0,255,0)
+local toggleColor = Color3.fromRGB(170,255,50)
+local blackActive = false
+local blackSaved = setmetatable({}, {__mode = "k"})
+
+local function paintBlackOne(d)
+    if not blackActive then return end
+    if not d:IsA("GuiObject") then return end
+    if d.BackgroundTransparency >= 1 then return end
+    if not blackSaved[d] then blackSaved[d] = d.BackgroundColor3 end
+    local isTrack = false
+    if d:IsA("Frame") and d.ClipsDescendants then
+        local c = d:FindFirstChildOfClass("UICorner")
+        local sy = d.AbsoluteSize.Y
+        if c and c.CornerRadius.Scale >= 0.5 and sy >= 16 and sy <= 36 then isTrack = true end
+    end
+    d.BackgroundColor3 = isTrack and toggleColor or Color3.fromRGB(0,0,0)
 end
 
-track(UIS.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then Main.Visible = not Main.Visible end
-end))
+local function setBlack(on)
+    blackActive = on
+    if not on then
+        for d, c in pairs(blackSaved) do pcall(function() if d and d.Parent then d.BackgroundColor3 = c end end) end
+        table.clear(blackSaved) return
+    end
+    local hub = getHub()
+    if not hub then return end
+    if Window.Root then
+        if not blackSaved[Window.Root] then blackSaved[Window.Root] = Window.Root.BackgroundColor3 end
+        Window.Root.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    end
+    for _, d in ipairs(hub:GetDescendants()) do paintBlackOne(d) end
+end
 
-track(LocalPlayer.CharacterRemoving:Connect(function()
-    stopFly()
-    stopVehFly()
-end))
+local function setPaint(mode)
+    paintMode = mode
+    local hub = getHub()
+    if not hub then return end
+    for _, d in ipairs(hub:GetDescendants()) do
+        if not paintSaved[d] then
+            paintSaved[d] = {stroke = d:IsA("UIStroke") and d.Color or nil, bg = d:IsA("GuiObject") and d.BackgroundColor3 or nil, text = (d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox")) and d.TextColor3 or nil}
+        end
+        local o = paintSaved[d]
+        if d:IsA("UIStroke") then d.Color = (mode == "outline" or mode == "full") and outlineColor or o.stroke
+        elseif d:IsA("GuiObject") and o.bg then if d.BackgroundTransparency < 1 then d.BackgroundColor3 = (mode == "full") and GREEN or o.bg end end
+        if o.text then d.TextColor3 = (mode == "full") and Color3.new(0,0,0) or o.text end
+    end
+end
+
+if Fluent.GUI then
+    track(Fluent.GUI.DescendantAdded:Connect(function(d)
+        task.defer(function() if not d.Parent then return end roundOne(d) paintBlackOne(d) end)
+    end))
+end
+
+task.spawn(function()
+    task.wait(2)
+    if Fluent.GUI then for _, d in ipairs(Fluent.GUI:GetDescendants()) do roundOne(d) end end
+    if blackActive then setBlack(true) end
+end)
+
+local ultraOn = false
+local ultraSaved = {}
+local function setProp(inst, prop, value) if not ultraSaved[inst] then ultraSaved[inst] = {} end if ultraSaved[inst][prop] == nil then ultraSaved[inst][prop] = inst[prop] end pcall(function() inst[prop] = value end) end
+local function restoreUltra() for inst, props in pairs(ultraSaved) do for prop, value in pairs(props) do pcall(function() inst[prop] = value end) end end table.clear(ultraSaved) end
+local function neonPart(part) local char = LocalPlayer.Character if char and part:IsDescendantOf(char) then return end setProp(part, "Material", Enum.Material.Neon) setProp(part, "Color", GREEN) end
+local function applyGameUI()
+    local hub = getHub()
+    for _, gui in ipairs(LocalPlayer.PlayerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui ~= hub and not gui.Name:find("GreenHub") then
+            for _, d in ipairs(gui:GetDescendants()) do
+                if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then setProp(d, "TextColor3", GREEN)
+                elseif d:IsA("ImageLabel") or d:IsA("ImageButton") then setProp(d, "ImageColor3", GREEN)
+                elseif d:IsA("Frame") and d.BackgroundTransparency < 1 then setProp(d, "BackgroundColor3", GREEN) end
+            end
+        end
+    end
+end
+local function applyUltra(on)
+    ultraOn = on
+    if on then
+        applyGameUI()
+        for _, d in ipairs(workspace:GetDescendants()) do if d:IsA("BasePart") then neonPart(d) end end
+        dc(ultraConn)
+        ultraConn = workspace.DescendantAdded:Connect(function(d) if ultraOn and d:IsA("BasePart") then neonPart(d) end end)
+    else dc(ultraConn) ultraConn = nil restoreUltra() end
+end
+
+Tabs.Settings:AddColorpicker("OutlineColor", {Title = "Outline Color", Default = outlineColor, Callback = function(v) outlineColor = v if paintMode == "outline" or paintMode == "full" then setPaint(paintMode) end end})
+Tabs.Settings:AddColorpicker("ToggleColor", {Title = "Toggle Color", Default = toggleColor, Callback = function(v) toggleColor = v if blackActive then for d in pairs(blackSaved) do if d and d.Parent then paintBlackOne(d) end end end end})
+Tabs.Settings:AddToggle("BlackTheme", {Title = "Dark Theme", Default = true, Callback = function(s)
+    if s then
+        if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+        if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+        if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+        if ultraOn then applyUltra(false) end
+        if paintMode == "full" or paintMode == "outline" then setPaint("none") end
+        setBlack(true)
+    else setBlack(false) end
+end})
+Tabs.Settings:AddToggle("GreenOutline", {Title = "Green Green Hub", Default = false, Callback = function(s)
+    if s then
+        if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+        if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+        if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+        if ultraOn then applyUltra(false) end
+        setPaint("outline")
+    elseif paintMode == "outline" then setPaint("none") end
+end})
+Tabs.Settings:AddToggle("GreenFull", {Title = "Green Green Green Hub", Default = false, Callback = function(s)
+    if s then
+        if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+        if Options.GreenUltra and Options.GreenUltra.Value then Options.GreenUltra:SetValue(false) end
+        if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+        if ultraOn then applyUltra(false) end
+        setPaint("full")
+    elseif paintMode == "full" and not ultraOn then setPaint("none") end
+end})
+Tabs.Settings:AddToggle("GreenUltra", {Title = "Green Green Green Green Hub", Default = false, Callback = function(s)
+    if s then
+        if Options.GreenOutline and Options.GreenOutline.Value then Options.GreenOutline:SetValue(false) end
+        if Options.GreenFull and Options.GreenFull.Value then Options.GreenFull:SetValue(false) end
+        if Options.BlackTheme and Options.BlackTheme.Value then Options.BlackTheme:SetValue(false) end
+        setPaint("full") applyUltra(true)
+    elseif ultraOn then
+        applyUltra(false)
+        if paintMode == "full" then setPaint("none") end
+    end
+end})
+
+local CFG_DIR = "GreenHub"
+local CFG_SUB = "GreenHub/configs"
+local CFG_AUTO = "GreenHub/autosave.json"
+local CFG_META = "GreenHub/meta.json"
+local fsOk = type(writefile)=="function" and type(readfile)=="function" and type(isfile)=="function" and type(isfolder)=="function" and type(makefolder)=="function" and type(listfiles)=="function"
+local CFG_SKIP = {ConfigName = true, ConfigList = true, AutoSaveCfg = true}
+local loadingCfg, cfgReady = false, false
+
+if fsOk then
+    pcall(function()
+        if not isfolder(CFG_DIR) then makefolder(CFG_DIR) end
+        if not isfolder(CFG_SUB) then makefolder(CFG_SUB) end
+    end)
+end
+
+local function writeJson(path, data) if not fsOk then return false end return pcall(function() writefile(path, HttpService:JSONEncode(data)) end) end
+local function readJson(path)
+    if not fsOk then return nil end
+    local ok, res = pcall(function() if not isfile(path) then return nil end return HttpService:JSONDecode(readfile(path)) end)
+    if ok then return res end
+end
+
+local meta = readJson(CFG_META) or {}
+if meta.autosave == nil then meta.autosave = true end
+if type(meta.autoload) ~= "string" then meta.autoload = "" end
+
+local function encodeValue(v) if typeof(v) == "Color3" then return {__c3 = true, r = v.R, g = v.G, b = v.B} end return v end
+local function collectConfig()
+    local t = {}
+    for name, opt in pairs(Options) do if not CFG_SKIP[name] and type(opt) == "table" and opt.Value ~= nil then t[name] = encodeValue(opt.Value) end end
+    return t
+end
+local function applyConfig(t)
+    loadingCfg = true
+    local names = {}
+    for n in pairs(t) do names[#names+1] = n end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local opt = Options[name] local v = t[name]
+        if opt and not CFG_SKIP[name] then
+            pcall(function()
+                if type(v) == "table" and v.__c3 then local c = Color3.new(v.r, v.g, v.b) if opt.SetValueRGB then opt:SetValueRGB(c) else opt:SetValue(c) end
+                elseif type(v) == "table" or opt.Value ~= v then opt:SetValue(v) end
+            end)
+        end
+    end
+    loadingCfg = false
+end
+local function listConfigs()
+    local out = {}
+    if not fsOk then return out end
+    pcall(function() for _, path in ipairs(listfiles(CFG_SUB)) do local n = tostring(path):match("([^/\\]+)%.json$") if n then out[#out+1] = n end end end)
+    table.sort(out) return out
+end
+local function cleanName(s) return tostring(s or ""):gsub("[^%w _%-]", ""):gsub("^%s+", ""):gsub("%s+$", "") end
+
+Tabs.Settings:AddSection("Config")
+local cfgStatus = Tabs.Settings:AddParagraph({Title = "Auto Load Config", Content = meta.autoload ~= "" and meta.autoload or "None"})
+Tabs.Settings:AddToggle("AutoSaveCfg", {Title = "Auto Save Options", Default = meta.autosave, Callback = function(s) meta.autosave = s writeJson(CFG_META, meta) end})
+Tabs.Settings:AddInput("ConfigName", {Title = "Config Name", Default = "", Placeholder = "Type a name", Numeric = false, Finished = false, Callback = function() end})
+local ConfigDrop = Tabs.Settings:AddDropdown("ConfigList", {Title = "Saved Configs", Values = listConfigs(), Multi = false, Default = nil, Callback = function() end})
+local function refreshConfigs() pcall(function() ConfigDrop:SetValues(listConfigs()) end) end
+local function selectedConfig() local n = Options.ConfigList and Options.ConfigList.Value if type(n) ~= "string" or n == "" then notify("Config", "Select a config first", 2) return nil end return n end
+
+Tabs.Settings:AddButton({Title = "Save Config", Callback = function()
+    local name = cleanName(Options.ConfigName.Value)
+    if name == "" then notify("Config", "Type a config name", 2) return end
+    if not fsOk then notify("Config", "File functions unavailable", 3) return end
+    if writeJson(CFG_SUB .. "/" .. name .. ".json", collectConfig()) then refreshConfigs() pcall(function() ConfigDrop:SetValue(name) end) notify("Config", "Saved " .. name, 3)
+    else notify("Config", "Save failed", 3) end
+end})
+Tabs.Settings:AddButton({Title = "Load Selected Config", Callback = function()
+    local name = selectedConfig() if not name then return end
+    local data = readJson(CFG_SUB .. "/" .. name .. ".json")
+    if data then applyConfig(data) notify("Config", "Loaded " .. name, 3)
+    else notify("Config", "Could not read " .. name, 3) end
+end})
+Tabs.Settings:AddButton({Title = "Set Selected As Auto Load", Callback = function()
+    local name = selectedConfig() if not name then return end
+    meta.autoload = name writeJson(CFG_META, meta) cfgStatus:SetDesc(name) notify("Config", name .. " will auto load", 3)
+end})
+Tabs.Settings:AddButton({Title = "Clear Auto Load", Callback = function() meta.autoload = "" writeJson(CFG_META, meta) cfgStatus:SetDesc("None") notify("Config", "Auto load cleared", 2) end})
+Tabs.Settings:AddButton({Title = "Delete Selected Config", Callback = function()
+    local name = selectedConfig() if not name then return end
+    pcall(function() delfile(CFG_SUB .. "/" .. name .. ".json") end)
+    if meta.autoload == name then meta.autoload = "" writeJson(CFG_META, meta) cfgStatus:SetDesc("None") end
+    refreshConfigs() notify("Config", "Deleted " .. name, 3)
+end})
+Tabs.Settings:AddButton({Title = "Refresh Config List", Callback = refreshConfigs})
+Tabs.Settings:AddButton({Title = "Reset All Settings To Default", Callback = function() notify("Config", "Rejoin to reset everything", 4) end})
+
+task.spawn(function()
+    while _G.MasterActive do
+        task.wait(3)
+        if meta.autosave and cfgReady and not loadingCfg and fsOk then writeJson(CFG_AUTO, collectConfig()) end
+    end
+end)
+
+task.spawn(function()
+    task.wait(0.5)
+    local data
+    if meta.autoload ~= "" then data = readJson(CFG_SUB .. "/" .. meta.autoload .. ".json") end
+    if not data and meta.autosave then data = readJson(CFG_AUTO) end
+    if data then applyConfig(data) end
+    cfgReady = true
+end)
+
+Window:SelectTab(1)
+notify("Green Hub", "Loaded!", 4)
