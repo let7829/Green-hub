@@ -6,9 +6,21 @@ local function fetch(u)
     else return game:HttpGet(u, true) end
 end
 local url = "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
-local src = fetch(url)
-if not src or #src < 1000 then src = game:HttpGet(url) end
-Fluent = loadstring(src)()
+local ok, src = pcall(fetch, url)
+if not ok or not src or #src < 1000 then
+    src = game:HttpGet(url, true)
+end
+local fn, err = loadstring(src)
+if not fn then
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Fluent Error", Text = "Failed to compile: " .. tostring(err), Duration = 10})
+    return
+end
+local success, loaded = pcall(fn)
+if not success or not loaded then
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Fluent Error", Text = "Failed to load: " .. tostring(loaded), Duration = 10})
+    return
+end
+Fluent = loaded
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
