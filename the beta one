@@ -1,4 +1,14 @@
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Fluent
+local function fetch(u)
+    if syn and syn.request then return syn.request({Url = u, Method = "GET"}).Body
+    elseif http_request then return http_request({Url = u, Method = "GET"}).Body
+    elseif request then return request({Url = u, Method = "GET"}).Body
+    else return game:HttpGet(u, true) end
+end
+local url = "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
+local src = fetch(url)
+if not src or #src < 1000 then src = game:HttpGet(url) end
+Fluent = loadstring(src)()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
