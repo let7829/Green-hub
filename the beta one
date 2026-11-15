@@ -57,7 +57,7 @@ local Window = Fluent:CreateWindow({
     Acrylic = false,
     Theme = "Darker",
     MinimizeKey = Enum.KeyCode.RightShift,
-    Search = true,
+    Search = false,
 })
 
 local Tabs = {
